@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Stoplight Extension</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      background: transparent;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    .stoplight-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      padding: 10px;
+    }
+
+    .stoplight {
+      background: #1a1a1a;
+      border-radius: 30px;
+      padding: 12px 10px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+      border: 2px solid #333;
+    }
+
+    .light {
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      transition: all 0.4s ease;
+      border: 2px solid #333;
+    }
+
+    .light.red {
+      background: #3d0000;
+    }
+
+    .light.yellow {
+      background: #3d3000;
+    }
+
+    .light.green {
+      background: #003d00;
+    }
+
+    /* Active states */
+    .light.red.active {
+      background: #ff0000;
+      box-shadow: 0 0 20px #ff0000, 0 0 40px rgba(255, 0, 0, 0.4);
+      border-color: #ff4444;
+    }
+
+    .light.yellow.active {
+      background: #ffcc00;
+      box-shadow: 0 0 20px #ffcc00, 0 0 40px rgba(255, 204, 0, 0.4);
+      border-color: #ffdd44;
+    }
+
+    .light.green.active {
+      background: #00cc00;
+      box-shadow: 0 0 20px #00cc00, 0 0 40px rgba(0, 204, 0, 0.4);
+      border-color: #44ff44;
+    }
+
+    .status-label {
+      margin-top: 8px;
+      font-size: 12px;
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .no-data {
+      color: #999;
+      font-size: 11px;
+      margin-top: 4px;
+    }
+  </style>
+</head>
+<body>
+  <div class="stoplight-container">
+    <div class="stoplight">
+      <div class="light red" id="light-red"></div>
+      <div class="light yellow" id="light-yellow"></div>
+      <div class="light green" id="light-green"></div>
+    </div>
+    <div class="status-label" id="status-label"></div>
+  </div>
+
+  <script src="https://extensions.tableauusercontent.com/tableauexts/tableauext-2.12.0.min.js"></script>
+  <script>
+    (function () {
+      'use strict';
+
+      const STATUS_COLUMN = 'STATUS';
+      const COLOR_MAP = {
+        1: 'green',
+        2: 'yellow',
+        3: 'red'
+      };
+      const LABEL_MAP = {
+        1: 'On Track',
+        2: 'At Risk',
+        3: 'Off Track'
+      };
+
+      let currentWorksheet = null;
+      let unregisterFilterListener = null;
+
+      // Initialize the extension
+      tableau.extensions.initializeAsync({ configure: showConfig }).then(() => {
+        const savedSheet = tableau.extensions.settings.get('worksheet');
+        if (savedSheet) {
+          loadWorksheet(savedSheet);
+        } else {
+          showConfig();
+        }
+      }).catch(err => {
+        console.error('Extension init failed:', err);
+        setLabel('Init error');
+      });
+
+      function showConfig() {
+        const popupUrl = window.location.href.replace('index.html', 'config.html');
+        tableau.extensions.ui.displayDialogAsync(popupUrl, '', { height: 300, width: 400 })
+          .then(closePayload => {
+            const savedSheet = tableau.extensions.settings.get('worksheet');
+            if (savedSheet) {
+              loadWorksheet(savedSheet);
+            }
+          })
+          .catch(error => {
+            if (error.errorCode === tableau.ErrorCodes.DialogClosedByUser) {
+              // User closed without saving - check if we already have a worksheet
+              const savedSheet = tableau.extensions.settings.get('worksheet');
+              if (savedSheet) {
+                loadWorksheet(savedSheet);
+              }
+            }
+          });
+      }
+
+      function loadWorksheet(sheetName) {
+        const dashboard = tableau.extensions.dashboardContent.dashboard;
+        const worksheet = dashboard.worksheets.find(ws => ws.name === sheetName);
+
+        if (!worksheet) {
+          setLabel('Worksheet not found');
+          return;
+        }
+
+        // Remove previous listener if any
+        if (unregisterFilterListener) {
+          unregisterFilterListener();
+        }
+
+        currentWorksheet = worksheet;
+
+        // Listen for filter changes
+        unregisterFilterListener = worksheet.addEventListener(
+          tableau.TableauEventType.FilterChanged,
+          () => refreshData()
+        );
+
+        // Also listen for mark selection changes
+        worksheet.addEventListener(
+          tableau.TableauEventType.MarkSelectionChanged,
+          () => refreshData()
+        );
+
+        // Initial data load
+        refreshData();
+      }
+
+      function refreshData() {
+        if (!currentWorksheet) return;
+
+        currentWorksheet.getSummaryDataAsync().then(dataTable => {
+          const columns = dataTable.columns;
+          const statusColIndex = columns.findIndex(
+            col => col.fieldName.toUpperCase() === STATUS_COLUMN ||
+                   col.fieldName.toUpperCase().replace(/\s+/g, '_') === STATUS_COLUMN
+          );
+
+          if (statusColIndex === -1) {
+            setStoplight(null);
+            setLabel('STATUS column not found');
+            return;
+          }
+
+          const rows = dataTable.data;
+          if (rows.length === 0) {
+            setStoplight(null);
+            setLabel('No data');
+            return;
+          }
+
+          // Use the first row's STATUS value
+          const rawValue = rows[0][statusColIndex].value;
+          const statusValue = parseInt(rawValue, 10);
+
+          if (COLOR_MAP[statusValue]) {
+            setStoplight(COLOR_MAP[statusValue]);
+            setLabel(LABEL_MAP[statusValue]);
+          } else {
+            setStoplight(null);
+            setLabel('Unknown: ' + rawValue);
+          }
+        }).catch(err => {
+          console.error('Data fetch error:', err);
+          setStoplight(null);
+          setLabel('Data error');
+        });
+      }
+
+      function setStoplight(color) {
+        const lights = ['red', 'yellow', 'green'];
+        lights.forEach(c => {
+          const el = document.getElementById('light-' + c);
+          if (c === color) {
+            el.classList.add('active');
+          } else {
+            el.classList.remove('active');
+          }
+        });
+      }
+
+      function setLabel(text) {
+        document.getElementById('status-label').textContent = text || '';
+      }
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Stoplight Configuration</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      padding: 20px;
+      background: #f8f9fa;
+      color: #333;
+    }
+
+    h2 {
+      font-size: 16px;
+      margin-bottom: 16px;
+      color: #1a1a1a;
+    }
+
+    label {
+      display: block;
+      font-size: 13px;
+      font-weight: 500;
+      margin-bottom: 6px;
+      color: #555;
+    }
+
+    select {
+      width: 100%;
+      padding: 8px 12px;
+      font-size: 14px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      background: #fff;
+      margin-bottom: 20px;
+    }
+
+    select:focus {
+      outline: none;
+      border-color: #4a90d9;
+      box-shadow: 0 0 0 2px rgba(74, 144, 217, 0.2);
+    }
+
+    .button-row {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
+    button {
+      padding: 8px 20px;
+      font-size: 13px;
+      border-radius: 4px;
+      cursor: pointer;
+      border: 1px solid #ccc;
+      background: #fff;
+      color: #333;
+    }
+
+    button:hover {
+      background: #f0f0f0;
+    }
+
+    button.primary {
+      background: #4a90d9;
+      color: #fff;
+      border-color: #4a90d9;
+    }
+
+    button.primary:hover {
+      background: #3a7bc8;
+    }
+
+    .info {
+      font-size: 12px;
+      color: #888;
+      margin-bottom: 16px;
+    }
+  </style>
+</head>
+<body>
+  <h2>Stoplight Configuration</h2>
+  <p class="info">Select the worksheet that contains the STATUS column (values 1, 2, or 3).</p>
+
+  <label for="worksheet-select">Worksheet</label>
+  <select id="worksheet-select">
+    <option value="">-- Select a worksheet --</option>
+  </select>
+
+  <div class="button-row">
+    <button id="btn-cancel">Cancel</button>
+    <button id="btn-save" class="primary">Save</button>
+  </div>
+
+  <script src="https://extensions.tableauusercontent.com/tableauexts/tableauext-2.12.0.min.js"></script>
+  <script>
+    (function () {
+      'use strict';
+
+      tableau.extensions.initializeDialogAsync().then(() => {
+        const dashboard = tableau.extensions.dashboardContent.dashboard;
+        const worksheets = dashboard.worksheets;
+        const select = document.getElementById('worksheet-select');
+        const savedSheet = tableau.extensions.settings.get('worksheet');
+
+        worksheets.forEach(ws => {
+          const option = document.createElement('option');
+          option.value = ws.name;
+          option.textContent = ws.name;
+          if (ws.name === savedSheet) {
+            option.selected = true;
+          }
+          select.appendChild(option);
+        });
+
+        document.getElementById('btn-save').addEventListener('click', () => {
+          const selectedSheet = select.value;
+          if (!selectedSheet) {
+            alert('Please select a worksheet.');
+            return;
+          }
+          tableau.extensions.settings.set('worksheet', selectedSheet);
+          tableau.extensions.settings.saveAsync().then(() => {
+            tableau.extensions.ui.closeDialog('saved');
+          });
+        });
+
+        document.getElementById('btn-cancel').addEventListener('click', () => {
+          tableau.extensions.ui.closeDialog('');
+        });
+      });
+    })();
+  </script>
+</body>
+</html>
