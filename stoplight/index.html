@@ -11,13 +11,18 @@
       box-sizing: border-box;
     }
 
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: transparent;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+
     body {
       display: flex;
       align-items: center;
       justify-content: center;
-      height: 100vh;
-      background: transparent;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     }
 
     .stoplight-container {
@@ -25,28 +30,28 @@
       flex-direction: column;
       align-items: center;
       justify-content: center;
+      width: 100%;
       height: 100%;
-      padding: 10px;
+      padding: 5%;
     }
 
     .stoplight {
       background: #1a1a1a;
-      border-radius: 30px;
-      padding: 12px 10px;
+      border-radius: 999px;
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 8px;
+      justify-content: center;
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
       border: 2px solid #333;
+      /* Sized dynamically by JS */
     }
 
     .light {
-      width: 50px;
-      height: 50px;
       border-radius: 50%;
       transition: all 0.4s ease;
       border: 2px solid #333;
+      /* Sized dynamically by JS */
     }
 
     .light.red {
@@ -81,40 +86,24 @@
     }
 
     .status-label {
-      margin-top: 8px;
       font-size: 12px;
       color: #666;
       text-transform: uppercase;
       letter-spacing: 1px;
-    }
-
-    .debug-info {
-      position: fixed;
-      bottom: 4px;
-      left: 4px;
-      right: 4px;
-      font-size: 10px;
-      color: #999;
-      background: rgba(0,0,0,0.8);
-      padding: 6px 8px;
-      border-radius: 4px;
-      max-height: 80px;
-      overflow-y: auto;
-      font-family: monospace;
-      white-space: pre-wrap;
+      text-align: center;
+      /* Sized dynamically by JS */
     }
   </style>
 </head>
 <body>
-  <div class="stoplight-container">
-    <div class="stoplight">
+  <div class="stoplight-container" id="container">
+    <div class="stoplight" id="stoplight">
       <div class="light red" id="light-red"></div>
       <div class="light yellow" id="light-yellow"></div>
       <div class="light green" id="light-green"></div>
     </div>
     <div class="status-label" id="status-label"></div>
   </div>
-  <div class="debug-info" id="debug">Initializing...</div>
 
   <script src="../lib/tableau.extensions.1.latest.min.js"></script>
   <script>
@@ -136,28 +125,55 @@
       let currentWorksheet = null;
       let unregisterFilterListener = null;
 
-      function debug(msg) {
-        const el = document.getElementById('debug');
-        el.textContent = msg;
-        console.log('[Stoplight]', msg);
+      // --- Responsive sizing ---
+      function resizeStoplight() {
+        const container = document.getElementById('container');
+        const stoplight = document.getElementById('stoplight');
+        const lights = document.querySelectorAll('.light');
+        const label = document.getElementById('status-label');
+
+        const w = container.clientWidth;
+        const h = container.clientHeight;
+
+        // The stoplight needs a 1:2.8 aspect ratio (width:height for 3 lights + gaps)
+        // Calculate the max light diameter that fits
+        const maxByHeight = (h * 0.85) / 3.6; // 3 lights + gaps + padding
+        const maxByWidth = w * 0.6;
+        const lightSize = Math.min(maxByHeight, maxByWidth);
+
+        // Minimum size clamp
+        const size = Math.max(lightSize, 16);
+
+        lights.forEach(light => {
+          light.style.width = size + 'px';
+          light.style.height = size + 'px';
+        });
+
+        const gap = size * 0.15;
+        const padding = size * 0.25;
+        stoplight.style.padding = padding + 'px ' + (padding * 0.8) + 'px';
+        stoplight.style.gap = gap + 'px';
+        stoplight.style.borderRadius = (size * 0.6) + 'px';
+
+        label.style.marginTop = (size * 0.15) + 'px';
+        label.style.fontSize = Math.max(Math.min(size * 0.22, 16), 9) + 'px';
       }
 
-      // Initialize the extension
-      tableau.extensions.initializeAsync({ configure: showConfig }).then(() => {
-        const dashboard = tableau.extensions.dashboardContent.dashboard;
-        const sheetNames = dashboard.worksheets.map(ws => ws.name);
-        debug('Init OK. Sheets: ' + sheetNames.join(', '));
+      // Observe container size changes
+      const observer = new ResizeObserver(resizeStoplight);
+      observer.observe(document.getElementById('container'));
+      resizeStoplight();
 
+      // --- Tableau Extension Logic ---
+      tableau.extensions.initializeAsync({ configure: showConfig }).then(() => {
         const savedSheet = tableau.extensions.settings.get('worksheet');
         if (savedSheet) {
-          debug('Saved worksheet: ' + savedSheet);
           loadWorksheet(savedSheet);
         } else {
-          debug('No worksheet configured. Opening config...');
           showConfig();
         }
       }).catch(err => {
-        debug('Init FAILED: ' + (err.message || err));
+        console.error('[Stoplight] Init failed:', err);
         setLabel('Init error');
       });
 
@@ -167,7 +183,6 @@
           .then(closePayload => {
             const savedSheet = tableau.extensions.settings.get('worksheet');
             if (savedSheet) {
-              debug('Config saved. Worksheet: ' + savedSheet);
               loadWorksheet(savedSheet);
             }
           })
@@ -176,11 +191,7 @@
               const savedSheet = tableau.extensions.settings.get('worksheet');
               if (savedSheet) {
                 loadWorksheet(savedSheet);
-              } else {
-                debug('Config closed without selection.');
               }
-            } else {
-              debug('Config error: ' + (error.message || error));
             }
           });
       }
@@ -190,38 +201,26 @@
         const worksheet = dashboard.worksheets.find(ws => ws.name === sheetName);
 
         if (!worksheet) {
-          debug('ERROR: Worksheet "' + sheetName + '" not found on dashboard.');
           setLabel('Worksheet not found');
           return;
         }
 
-        // Remove previous listener if any
         if (unregisterFilterListener) {
           unregisterFilterListener();
         }
 
         currentWorksheet = worksheet;
-        debug('Loaded worksheet: ' + sheetName + '. Listening for changes...');
 
-        // Listen for filter changes
         unregisterFilterListener = worksheet.addEventListener(
           tableau.TableauEventType.FilterChanged,
-          () => {
-            debug('Filter changed on ' + sheetName);
-            refreshData();
-          }
+          () => refreshData()
         );
 
-        // Also listen for mark selection changes
         worksheet.addEventListener(
           tableau.TableauEventType.MarkSelectionChanged,
-          () => {
-            debug('Mark selection changed on ' + sheetName);
-            refreshData();
-          }
+          () => refreshData()
         );
 
-        // Initial data load
         refreshData();
       }
 
@@ -230,22 +229,18 @@
 
         currentWorksheet.getSummaryDataAsync().then(dataTable => {
           const columns = dataTable.columns;
-          const colNames = columns.map(c => c.fieldName);
 
-          // Flexible column matching - look for STATUS anywhere in name
-          const statusColIndex = columns.findIndex(
-            col => {
-              const name = col.fieldName.toUpperCase().replace(/\s+/g, '_');
-              return name === STATUS_COLUMN ||
-                     name === 'STATUS_CODE' ||
-                     name.indexOf('STATUS') !== -1;
-            }
-          );
+          // Flexible column matching - look for STATUS anywhere in field name
+          const statusColIndex = columns.findIndex(col => {
+            const name = col.fieldName.toUpperCase().replace(/\s+/g, '_');
+            return name === STATUS_COLUMN ||
+                   name === 'STATUS_CODE' ||
+                   name.indexOf('STATUS') !== -1;
+          });
 
           if (statusColIndex === -1) {
             setStoplight(null);
             setLabel('STATUS not found');
-            debug('Columns available: ' + colNames.join(', ') + '\nNo STATUS column matched.');
             return;
           }
 
@@ -253,16 +248,11 @@
           if (rows.length === 0) {
             setStoplight(null);
             setLabel('No data');
-            debug('Worksheet has 0 rows (all filtered out?)');
             return;
           }
 
-          // Use the first row's STATUS value
           const rawValue = rows[0][statusColIndex].value;
           const statusValue = parseInt(rawValue, 10);
-
-          debug('Found "' + columns[statusColIndex].fieldName + '" col. ' +
-                rows.length + ' rows. First value: ' + rawValue + ' → ' + (COLOR_MAP[statusValue] || 'unknown'));
 
           if (COLOR_MAP[statusValue]) {
             setStoplight(COLOR_MAP[statusValue]);
@@ -272,7 +262,7 @@
             setLabel('Unknown: ' + rawValue);
           }
         }).catch(err => {
-          debug('Data fetch error: ' + (err.message || err));
+          console.error('[Stoplight] Data error:', err);
           setStoplight(null);
           setLabel('Data error');
         });
