@@ -44,14 +44,12 @@
       justify-content: center;
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
       border: 2px solid #333;
-      /* Sized dynamically by JS */
     }
 
     .light {
       border-radius: 50%;
       transition: all 0.4s ease;
       border: 2px solid #333;
-      /* Sized dynamically by JS */
     }
 
     .light.red {
@@ -66,7 +64,6 @@
       background: #003d00;
     }
 
-    /* Active states */
     .light.red.active {
       background: #ff0000;
       box-shadow: 0 0 20px #ff0000, 0 0 40px rgba(255, 0, 0, 0.4);
@@ -91,7 +88,6 @@
       text-transform: uppercase;
       letter-spacing: 1px;
       text-align: center;
-      /* Sized dynamically by JS */
     }
   </style>
 </head>
@@ -110,20 +106,20 @@
     (function () {
       'use strict';
 
-      const STATUS_COLUMN = 'STATUS';
-      const COLOR_MAP = {
-        1: 'green',
-        2: 'yellow',
-        3: 'red'
-      };
-      const LABEL_MAP = {
-        1: 'On Track',
-        2: 'At Risk',
-        3: 'Off Track'
-      };
-
       let currentWorksheet = null;
       let unregisterFilterListener = null;
+
+      // Configuration loaded from settings
+      let config = {
+        columnName: 'Status',
+        mode: 'exact',
+        exact: { green: '1', yellow: '2', red: '3' },
+        range: {
+          green: { min: null, max: null },
+          yellow: { min: null, max: null },
+          red: { min: null, max: null }
+        }
+      };
 
       // --- Responsive sizing ---
       function resizeStoplight() {
@@ -135,37 +131,94 @@
         const w = container.clientWidth;
         const h = container.clientHeight;
 
-        // The stoplight needs a 1:2.8 aspect ratio (width:height for 3 lights + gaps)
-        // Calculate the max light diameter that fits
-        const maxByHeight = (h * 0.85) / 3.6; // 3 lights + gaps + padding
-        const maxByWidth = w * 0.6;
-        const lightSize = Math.min(maxByHeight, maxByWidth);
-
-        // Minimum size clamp
-        const size = Math.max(lightSize, 16);
+        const maxByHeight = (h * 0.70) / 3.6;
+        const maxByWidth = w * 0.55;
+        const lightSize = Math.max(Math.min(maxByHeight, maxByWidth), 16);
 
         lights.forEach(light => {
-          light.style.width = size + 'px';
-          light.style.height = size + 'px';
+          light.style.width = lightSize + 'px';
+          light.style.height = lightSize + 'px';
         });
 
-        const gap = size * 0.15;
-        const padding = size * 0.25;
+        const gap = lightSize * 0.15;
+        const padding = lightSize * 0.25;
         stoplight.style.padding = padding + 'px ' + (padding * 0.8) + 'px';
         stoplight.style.gap = gap + 'px';
-        stoplight.style.borderRadius = (size * 0.6) + 'px';
+        stoplight.style.borderRadius = (lightSize * 0.6) + 'px';
 
-        label.style.marginTop = (size * 0.15) + 'px';
-        label.style.fontSize = Math.max(Math.min(size * 0.22, 16), 9) + 'px';
+        label.style.marginTop = (lightSize * 0.15) + 'px';
+        label.style.fontSize = Math.max(Math.min(lightSize * 0.22, 16), 9) + 'px';
       }
 
-      // Observe container size changes
       const observer = new ResizeObserver(resizeStoplight);
       observer.observe(document.getElementById('container'));
       resizeStoplight();
 
+      // --- Load config from settings ---
+      function loadConfig() {
+        const settings = tableau.extensions.settings;
+
+        config.columnName = settings.get('columnName') || 'Status';
+        config.mode = settings.get('mode') || 'exact';
+
+        // Exact match values (default to 1/2/3 for backward compatibility)
+        config.exact.green = settings.get('exactGreen') || '1';
+        config.exact.yellow = settings.get('exactYellow') || '2';
+        config.exact.red = settings.get('exactRed') || '3';
+
+        // Range values (parse to number or null)
+        config.range.green.min = parseNum(settings.get('rangeGreenMin'));
+        config.range.green.max = parseNum(settings.get('rangeGreenMax'));
+        config.range.yellow.min = parseNum(settings.get('rangeYellowMin'));
+        config.range.yellow.max = parseNum(settings.get('rangeYellowMax'));
+        config.range.red.min = parseNum(settings.get('rangeRedMin'));
+        config.range.red.max = parseNum(settings.get('rangeRedMax'));
+      }
+
+      function parseNum(val) {
+        if (val === null || val === undefined || val === '') return null;
+        const n = parseFloat(val);
+        return isNaN(n) ? null : n;
+      }
+
+      // --- Determine color from value ---
+      function getColor(rawValue) {
+        if (config.mode === 'exact') {
+          return getColorExact(rawValue);
+        } else {
+          return getColorRange(rawValue);
+        }
+      }
+
+      function getColorExact(rawValue) {
+        const val = String(rawValue).trim().toLowerCase();
+        if (val === config.exact.green.toLowerCase()) return 'green';
+        if (val === config.exact.yellow.toLowerCase()) return 'yellow';
+        if (val === config.exact.red.toLowerCase()) return 'red';
+        return null;
+      }
+
+      function getColorRange(rawValue) {
+        const num = parseFloat(rawValue);
+        if (isNaN(num)) return null;
+
+        // Check each range (green, yellow, red) - first match wins
+        // Order: green first so "good" is prioritized if ranges overlap
+        if (inRange(num, config.range.green)) return 'green';
+        if (inRange(num, config.range.yellow)) return 'yellow';
+        if (inRange(num, config.range.red)) return 'red';
+        return null;
+      }
+
+      function inRange(num, range) {
+        const minOk = (range.min === null) || (num >= range.min);
+        const maxOk = (range.max === null) || (num <= range.max);
+        return minOk && maxOk;
+      }
+
       // --- Tableau Extension Logic ---
       tableau.extensions.initializeAsync({ configure: showConfig }).then(() => {
+        loadConfig();
         const savedSheet = tableau.extensions.settings.get('worksheet');
         if (savedSheet) {
           loadWorksheet(savedSheet);
@@ -179,8 +232,9 @@
 
       function showConfig() {
         const popupUrl = window.location.href.replace('index.html', 'config.html');
-        tableau.extensions.ui.displayDialogAsync(popupUrl, '', { height: 300, width: 400 })
+        tableau.extensions.ui.displayDialogAsync(popupUrl, '', { height: 500, width: 420 })
           .then(closePayload => {
+            loadConfig();
             const savedSheet = tableau.extensions.settings.get('worksheet');
             if (savedSheet) {
               loadWorksheet(savedSheet);
@@ -190,6 +244,7 @@
             if (error.errorCode === tableau.ErrorCodes.DialogClosedByUser) {
               const savedSheet = tableau.extensions.settings.get('worksheet');
               if (savedSheet) {
+                loadConfig();
                 loadWorksheet(savedSheet);
               }
             }
@@ -229,18 +284,17 @@
 
         currentWorksheet.getSummaryDataAsync().then(dataTable => {
           const columns = dataTable.columns;
+          const targetCol = config.columnName.toUpperCase().replace(/\s+/g, '_');
 
-          // Flexible column matching - look for STATUS anywhere in field name
-          const statusColIndex = columns.findIndex(col => {
+          // Find column by case-insensitive match (exact or contains)
+          const colIndex = columns.findIndex(col => {
             const name = col.fieldName.toUpperCase().replace(/\s+/g, '_');
-            return name === STATUS_COLUMN ||
-                   name === 'STATUS_CODE' ||
-                   name.indexOf('STATUS') !== -1;
+            return name === targetCol || name.indexOf(targetCol) !== -1;
           });
 
-          if (statusColIndex === -1) {
+          if (colIndex === -1) {
             setStoplight(null);
-            setLabel('STATUS not found');
+            setLabel(config.columnName + ' not found');
             return;
           }
 
@@ -251,15 +305,15 @@
             return;
           }
 
-          const rawValue = rows[0][statusColIndex].value;
-          const statusValue = parseInt(rawValue, 10);
+          const rawValue = rows[0][colIndex].value;
+          const color = getColor(rawValue);
 
-          if (COLOR_MAP[statusValue]) {
-            setStoplight(COLOR_MAP[statusValue]);
-            setLabel(LABEL_MAP[statusValue]);
+          if (color) {
+            setStoplight(color);
+            setLabel(color === 'green' ? 'On Track' : color === 'yellow' ? 'At Risk' : 'Off Track');
           } else {
             setStoplight(null);
-            setLabel('Unknown: ' + rawValue);
+            setLabel('No match: ' + rawValue);
           }
         }).catch(err => {
           console.error('[Stoplight] Data error:', err);
@@ -269,14 +323,9 @@
       }
 
       function setStoplight(color) {
-        const lights = ['red', 'yellow', 'green'];
-        lights.forEach(c => {
+        ['red', 'yellow', 'green'].forEach(c => {
           const el = document.getElementById('light-' + c);
-          if (c === color) {
-            el.classList.add('active');
-          } else {
-            el.classList.remove('active');
-          }
+          el.classList.toggle('active', c === color);
         });
       }
 

@@ -20,7 +20,7 @@
 
     h2 {
       font-size: 16px;
-      margin-bottom: 16px;
+      margin-bottom: 12px;
       color: #1a1a1a;
     }
 
@@ -28,33 +28,107 @@
       display: block;
       font-size: 13px;
       font-weight: 500;
-      margin-bottom: 6px;
+      margin-bottom: 4px;
       color: #555;
     }
 
-    select {
+    select, input[type="text"], input[type="number"] {
       width: 100%;
-      padding: 8px 12px;
-      font-size: 14px;
+      padding: 6px 10px;
+      font-size: 13px;
       border: 1px solid #ccc;
       border-radius: 4px;
       background: #fff;
-      margin-bottom: 20px;
+      margin-bottom: 12px;
     }
 
-    select:focus {
+    select:focus, input:focus {
       outline: none;
       border-color: #4a90d9;
       box-shadow: 0 0 0 2px rgba(74, 144, 217, 0.2);
+    }
+
+    .mode-toggle {
+      display: flex;
+      gap: 0;
+      margin-bottom: 14px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .mode-toggle button {
+      flex: 1;
+      padding: 7px 12px;
+      font-size: 12px;
+      border: none;
+      background: #fff;
+      color: #555;
+      cursor: pointer;
+      border-right: 1px solid #ccc;
+    }
+
+    .mode-toggle button:last-child {
+      border-right: none;
+    }
+
+    .mode-toggle button.active {
+      background: #4a90d9;
+      color: #fff;
+    }
+
+    .section {
+      margin-bottom: 14px;
+    }
+
+    .color-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .color-dot {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .color-dot.green { background: #00cc00; }
+    .color-dot.yellow { background: #ffcc00; }
+    .color-dot.red { background: #ff0000; }
+
+    .color-row label {
+      width: 50px;
+      margin-bottom: 0;
+      font-size: 12px;
+    }
+
+    .color-row input {
+      margin-bottom: 0;
+      flex: 1;
+    }
+
+    .range-inputs {
+      display: flex;
+      gap: 6px;
+      flex: 1;
+    }
+
+    .range-inputs input {
+      flex: 1;
+      margin-bottom: 0;
     }
 
     .button-row {
       display: flex;
       justify-content: flex-end;
       gap: 8px;
+      margin-top: 16px;
     }
 
-    button {
+    button.btn {
       padding: 8px 20px;
       font-size: 13px;
       border-radius: 4px;
@@ -64,39 +138,118 @@
       color: #333;
     }
 
-    button:hover {
+    button.btn:hover {
       background: #f0f0f0;
     }
 
-    button.primary {
+    button.btn.primary {
       background: #4a90d9;
       color: #fff;
       border-color: #4a90d9;
     }
 
-    button.primary:hover {
+    button.btn.primary:hover {
       background: #3a7bc8;
     }
 
     .info {
-      font-size: 12px;
+      font-size: 11px;
       color: #888;
-      margin-bottom: 16px;
+      margin-bottom: 14px;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    .hint {
+      font-size: 10px;
+      color: #999;
+      margin-top: -8px;
+      margin-bottom: 10px;
     }
   </style>
 </head>
 <body>
   <h2>Stoplight Configuration</h2>
-  <p class="info">Select the worksheet that contains the STATUS column (values 1, 2, or 3).</p>
+  <p class="info">Configure which worksheet and column drive the stoplight, and how values map to colors.</p>
 
-  <label for="worksheet-select">Worksheet</label>
-  <select id="worksheet-select">
-    <option value="">-- Select a worksheet --</option>
-  </select>
+  <!-- Worksheet selection -->
+  <div class="section">
+    <label for="worksheet-select">Worksheet</label>
+    <select id="worksheet-select">
+      <option value="">-- Select a worksheet --</option>
+    </select>
+  </div>
+
+  <!-- Column name -->
+  <div class="section">
+    <label for="column-name">Column Name</label>
+    <input type="text" id="column-name" placeholder="Status" value="Status">
+    <p class="hint">The field name in Tableau (case-insensitive match).</p>
+  </div>
+
+  <!-- Mode toggle -->
+  <div class="section">
+    <label>Matching Mode</label>
+    <div class="mode-toggle">
+      <button id="mode-exact" class="active" type="button">Exact Match</button>
+      <button id="mode-range" type="button">Numeric Range</button>
+    </div>
+  </div>
+
+  <!-- Exact match inputs -->
+  <div class="section" id="exact-section">
+    <div class="color-row">
+      <span class="color-dot green"></span>
+      <label>Green</label>
+      <input type="text" id="exact-green" placeholder="1 or Good">
+    </div>
+    <div class="color-row">
+      <span class="color-dot yellow"></span>
+      <label>Yellow</label>
+      <input type="text" id="exact-yellow" placeholder="2 or Warning">
+    </div>
+    <div class="color-row">
+      <span class="color-dot red"></span>
+      <label>Red</label>
+      <input type="text" id="exact-red" placeholder="3 or Bad">
+    </div>
+    <p class="hint">Values are matched case-insensitively.</p>
+  </div>
+
+  <!-- Numeric range inputs -->
+  <div class="section hidden" id="range-section">
+    <div class="color-row">
+      <span class="color-dot green"></span>
+      <label>Green</label>
+      <div class="range-inputs">
+        <input type="number" id="range-green-min" placeholder="Min">
+        <input type="number" id="range-green-max" placeholder="Max">
+      </div>
+    </div>
+    <div class="color-row">
+      <span class="color-dot yellow"></span>
+      <label>Yellow</label>
+      <div class="range-inputs">
+        <input type="number" id="range-yellow-min" placeholder="Min">
+        <input type="number" id="range-yellow-max" placeholder="Max">
+      </div>
+    </div>
+    <div class="color-row">
+      <span class="color-dot red"></span>
+      <label>Red</label>
+      <div class="range-inputs">
+        <input type="number" id="range-red-min" placeholder="Min">
+        <input type="number" id="range-red-max" placeholder="Max">
+      </div>
+    </div>
+    <p class="hint">Value is checked against each range (inclusive). Leave Min or Max blank for unbounded.</p>
+  </div>
 
   <div class="button-row">
-    <button id="btn-cancel">Cancel</button>
-    <button id="btn-save" class="primary">Save</button>
+    <button class="btn" id="btn-cancel">Cancel</button>
+    <button class="btn primary" id="btn-save">Save</button>
   </div>
 
   <script src="../lib/tableau.extensions.1.latest.min.js"></script>
@@ -104,12 +257,32 @@
     (function () {
       'use strict';
 
+      let currentMode = 'exact';
+
+      // Mode toggle
+      document.getElementById('mode-exact').addEventListener('click', () => setMode('exact'));
+      document.getElementById('mode-range').addEventListener('click', () => setMode('range'));
+
+      function setMode(mode) {
+        currentMode = mode;
+        document.getElementById('mode-exact').classList.toggle('active', mode === 'exact');
+        document.getElementById('mode-range').classList.toggle('active', mode === 'range');
+        document.getElementById('exact-section').classList.toggle('hidden', mode !== 'exact');
+        document.getElementById('range-section').classList.toggle('hidden', mode !== 'range');
+      }
+
       tableau.extensions.initializeDialogAsync().then(() => {
         const dashboard = tableau.extensions.dashboardContent.dashboard;
         const worksheets = dashboard.worksheets;
         const select = document.getElementById('worksheet-select');
-        const savedSheet = tableau.extensions.settings.get('worksheet');
 
+        // Load saved settings
+        const settings = tableau.extensions.settings;
+        const savedSheet = settings.get('worksheet');
+        const savedColumn = settings.get('columnName');
+        const savedMode = settings.get('mode');
+
+        // Populate worksheets
         worksheets.forEach(ws => {
           const option = document.createElement('option');
           option.value = ws.name;
@@ -120,18 +293,67 @@
           select.appendChild(option);
         });
 
+        // Restore column name
+        if (savedColumn) {
+          document.getElementById('column-name').value = savedColumn;
+        }
+
+        // Restore mode
+        if (savedMode) {
+          setMode(savedMode);
+        }
+
+        // Restore exact match values
+        if (settings.get('exactGreen')) document.getElementById('exact-green').value = settings.get('exactGreen');
+        if (settings.get('exactYellow')) document.getElementById('exact-yellow').value = settings.get('exactYellow');
+        if (settings.get('exactRed')) document.getElementById('exact-red').value = settings.get('exactRed');
+
+        // Restore range values
+        if (settings.get('rangeGreenMin')) document.getElementById('range-green-min').value = settings.get('rangeGreenMin');
+        if (settings.get('rangeGreenMax')) document.getElementById('range-green-max').value = settings.get('rangeGreenMax');
+        if (settings.get('rangeYellowMin')) document.getElementById('range-yellow-min').value = settings.get('rangeYellowMin');
+        if (settings.get('rangeYellowMax')) document.getElementById('range-yellow-max').value = settings.get('rangeYellowMax');
+        if (settings.get('rangeRedMin')) document.getElementById('range-red-min').value = settings.get('rangeRedMin');
+        if (settings.get('rangeRedMax')) document.getElementById('range-red-max').value = settings.get('rangeRedMax');
+
+        // Save button
         document.getElementById('btn-save').addEventListener('click', () => {
           const selectedSheet = select.value;
           if (!selectedSheet) {
             alert('Please select a worksheet.');
             return;
           }
-          tableau.extensions.settings.set('worksheet', selectedSheet);
-          tableau.extensions.settings.saveAsync().then(() => {
+
+          const columnName = document.getElementById('column-name').value.trim();
+          if (!columnName) {
+            alert('Please enter a column name.');
+            return;
+          }
+
+          // Save all settings
+          settings.set('worksheet', selectedSheet);
+          settings.set('columnName', columnName);
+          settings.set('mode', currentMode);
+
+          // Save exact match values
+          settings.set('exactGreen', document.getElementById('exact-green').value.trim());
+          settings.set('exactYellow', document.getElementById('exact-yellow').value.trim());
+          settings.set('exactRed', document.getElementById('exact-red').value.trim());
+
+          // Save range values
+          settings.set('rangeGreenMin', document.getElementById('range-green-min').value.trim());
+          settings.set('rangeGreenMax', document.getElementById('range-green-max').value.trim());
+          settings.set('rangeYellowMin', document.getElementById('range-yellow-min').value.trim());
+          settings.set('rangeYellowMax', document.getElementById('range-yellow-max').value.trim());
+          settings.set('rangeRedMin', document.getElementById('range-red-min').value.trim());
+          settings.set('rangeRedMax', document.getElementById('range-red-max').value.trim());
+
+          settings.saveAsync().then(() => {
             tableau.extensions.ui.closeDialog('saved');
           });
         });
 
+        // Cancel button
         document.getElementById('btn-cancel').addEventListener('click', () => {
           tableau.extensions.ui.closeDialog('');
         });
