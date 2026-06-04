@@ -88,10 +88,20 @@
       letter-spacing: 1px;
     }
 
-    .no-data {
+    .debug-info {
+      position: fixed;
+      bottom: 4px;
+      left: 4px;
+      right: 4px;
+      font-size: 10px;
       color: #999;
-      font-size: 11px;
-      margin-top: 4px;
+      background: rgba(0,0,0,0.8);
+      padding: 6px 8px;
+      border-radius: 4px;
+      max-height: 80px;
+      overflow-y: auto;
+      font-family: monospace;
+      white-space: pre-wrap;
     }
   </style>
 </head>
@@ -104,6 +114,7 @@
     </div>
     <div class="status-label" id="status-label"></div>
   </div>
+  <div class="debug-info" id="debug">Initializing...</div>
 
   <script src="https://extensions.tableauusercontent.com/tableauexts/tableauext-2.12.0.min.js"></script>
   <script>
@@ -125,16 +136,28 @@
       let currentWorksheet = null;
       let unregisterFilterListener = null;
 
+      function debug(msg) {
+        const el = document.getElementById('debug');
+        el.textContent = msg;
+        console.log('[Stoplight]', msg);
+      }
+
       // Initialize the extension
       tableau.extensions.initializeAsync({ configure: showConfig }).then(() => {
+        const dashboard = tableau.extensions.dashboardContent.dashboard;
+        const sheetNames = dashboard.worksheets.map(ws => ws.name);
+        debug('Init OK. Sheets: ' + sheetNames.join(', '));
+
         const savedSheet = tableau.extensions.settings.get('worksheet');
         if (savedSheet) {
+          debug('Saved worksheet: ' + savedSheet);
           loadWorksheet(savedSheet);
         } else {
+          debug('No worksheet configured. Opening config...');
           showConfig();
         }
       }).catch(err => {
-        console.error('Extension init failed:', err);
+        debug('Init FAILED: ' + (err.message || err));
         setLabel('Init error');
       });
 
@@ -144,16 +167,20 @@
           .then(closePayload => {
             const savedSheet = tableau.extensions.settings.get('worksheet');
             if (savedSheet) {
+              debug('Config saved. Worksheet: ' + savedSheet);
               loadWorksheet(savedSheet);
             }
           })
           .catch(error => {
             if (error.errorCode === tableau.ErrorCodes.DialogClosedByUser) {
-              // User closed without saving - check if we already have a worksheet
               const savedSheet = tableau.extensions.settings.get('worksheet');
               if (savedSheet) {
                 loadWorksheet(savedSheet);
+              } else {
+                debug('Config closed without selection.');
               }
+            } else {
+              debug('Config error: ' + (error.message || error));
             }
           });
       }
@@ -163,6 +190,7 @@
         const worksheet = dashboard.worksheets.find(ws => ws.name === sheetName);
 
         if (!worksheet) {
+          debug('ERROR: Worksheet "' + sheetName + '" not found on dashboard.');
           setLabel('Worksheet not found');
           return;
         }
@@ -173,17 +201,24 @@
         }
 
         currentWorksheet = worksheet;
+        debug('Loaded worksheet: ' + sheetName + '. Listening for changes...');
 
         // Listen for filter changes
         unregisterFilterListener = worksheet.addEventListener(
           tableau.TableauEventType.FilterChanged,
-          () => refreshData()
+          () => {
+            debug('Filter changed on ' + sheetName);
+            refreshData();
+          }
         );
 
         // Also listen for mark selection changes
         worksheet.addEventListener(
           tableau.TableauEventType.MarkSelectionChanged,
-          () => refreshData()
+          () => {
+            debug('Mark selection changed on ' + sheetName);
+            refreshData();
+          }
         );
 
         // Initial data load
@@ -195,14 +230,22 @@
 
         currentWorksheet.getSummaryDataAsync().then(dataTable => {
           const columns = dataTable.columns;
+          const colNames = columns.map(c => c.fieldName);
+
+          // Flexible column matching - look for STATUS anywhere in name
           const statusColIndex = columns.findIndex(
-            col => col.fieldName.toUpperCase() === STATUS_COLUMN ||
-                   col.fieldName.toUpperCase().replace(/\s+/g, '_') === STATUS_COLUMN
+            col => {
+              const name = col.fieldName.toUpperCase().replace(/\s+/g, '_');
+              return name === STATUS_COLUMN ||
+                     name === 'STATUS_CODE' ||
+                     name.indexOf('STATUS') !== -1;
+            }
           );
 
           if (statusColIndex === -1) {
             setStoplight(null);
-            setLabel('STATUS column not found');
+            setLabel('STATUS not found');
+            debug('Columns available: ' + colNames.join(', ') + '\nNo STATUS column matched.');
             return;
           }
 
@@ -210,12 +253,16 @@
           if (rows.length === 0) {
             setStoplight(null);
             setLabel('No data');
+            debug('Worksheet has 0 rows (all filtered out?)');
             return;
           }
 
           // Use the first row's STATUS value
           const rawValue = rows[0][statusColIndex].value;
           const statusValue = parseInt(rawValue, 10);
+
+          debug('Found "' + columns[statusColIndex].fieldName + '" col. ' +
+                rows.length + ' rows. First value: ' + rawValue + ' → ' + (COLOR_MAP[statusValue] || 'unknown'));
 
           if (COLOR_MAP[statusValue]) {
             setStoplight(COLOR_MAP[statusValue]);
@@ -225,7 +272,7 @@
             setLabel('Unknown: ' + rawValue);
           }
         }).catch(err => {
-          console.error('Data fetch error:', err);
+          debug('Data fetch error: ' + (err.message || err));
           setStoplight(null);
           setLabel('Data error');
         });
