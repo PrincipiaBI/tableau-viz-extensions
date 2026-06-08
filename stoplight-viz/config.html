@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Format Stoplight</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      padding: 20px;
+      background: #f8f9fa;
+      color: #333;
+      font-size: 13px;
+    }
+    h2 { font-size: 15px; margin-bottom: 14px; color: #1a1a1a; }
+    h3 { font-size: 13px; margin-bottom: 8px; color: #333; border-bottom: 1px solid #e0e0e0; padding-bottom: 4px; }
+    .section { margin-bottom: 18px; }
+    label { display: block; font-size: 12px; font-weight: 500; margin-bottom: 4px; color: #555; }
+    select, input[type="text"], input[type="number"] {
+      width: 100%; padding: 5px 8px; font-size: 12px;
+      border: 1px solid #ccc; border-radius: 4px; background: #fff; margin-bottom: 10px;
+    }
+    select:focus, input:focus { outline: none; border-color: #4a90d9; box-shadow: 0 0 0 2px rgba(74,144,217,0.2); }
+    .toggle-row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+    .toggle-row label { margin-bottom: 0; flex: 1; }
+    input[type="checkbox"] { width: 16px; height: 16px; }
+    .mode-toggle { display: flex; gap: 0; margin-bottom: 12px; border: 1px solid #ccc; border-radius: 4px; overflow: hidden; }
+    .mode-toggle button { flex: 1; padding: 6px 10px; font-size: 11px; border: none; background: #fff; color: #555; cursor: pointer; border-right: 1px solid #ccc; }
+    .mode-toggle button:last-child { border-right: none; }
+    .mode-toggle button.active { background: #4a90d9; color: #fff; }
+    .color-row { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+    .color-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+    .color-dot.green { background: #00cc00; }
+    .color-dot.yellow { background: #ffcc00; }
+    .color-dot.red { background: #ff0000; }
+    .color-row label { width: 45px; margin-bottom: 0; font-size: 11px; }
+    .color-row input { margin-bottom: 0; flex: 1; }
+    .range-inputs { display: flex; gap: 4px; flex: 1; }
+    .range-inputs input { flex: 1; margin-bottom: 0; }
+    .button-row { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+    button.btn { padding: 7px 18px; font-size: 12px; border-radius: 4px; cursor: pointer; border: 1px solid #ccc; background: #fff; color: #333; }
+    button.btn:hover { background: #f0f0f0; }
+    button.btn.primary { background: #4a90d9; color: #fff; border-color: #4a90d9; }
+    button.btn.primary:hover { background: #3a7bc8; }
+    .hidden { display: none; }
+    .hint { font-size: 10px; color: #999; margin-top: -6px; margin-bottom: 8px; }
+  </style>
+</head>
+<body>
+  <h2>Format Stoplight</h2>
+
+  <!-- Label Settings -->
+  <div class="section">
+    <h3>Label</h3>
+    <div class="toggle-row">
+      <input type="checkbox" id="label-enabled" checked>
+      <label for="label-enabled">Show label below stoplight</label>
+    </div>
+    <label for="label-green">Green label</label>
+    <input type="text" id="label-green" placeholder="On Track">
+    <label for="label-yellow">Yellow label</label>
+    <input type="text" id="label-yellow" placeholder="At Risk">
+    <label for="label-red">Red label</label>
+    <input type="text" id="label-red" placeholder="Off Track">
+  </div>
+
+  <!-- Tooltip Settings -->
+  <div class="section">
+    <h3>Tooltips</h3>
+    <div class="toggle-row">
+      <input type="checkbox" id="tooltip-enabled" checked>
+      <label for="tooltip-enabled">Show tooltip on hover</label>
+    </div>
+    <p class="hint">Drag fields onto the Tooltip tile on the Marks card to configure tooltip content.</p>
+  </div>
+
+  <!-- Color Mapping -->
+  <div class="section">
+    <h3>Color Mapping</h3>
+    <label>Matching Mode</label>
+    <div class="mode-toggle">
+      <button id="mode-exact" class="active" type="button">Exact Match</button>
+      <button id="mode-range" type="button">Numeric Range</button>
+    </div>
+
+    <!-- Exact match inputs -->
+    <div id="exact-section">
+      <div class="color-row">
+        <span class="color-dot green"></span>
+        <label>Green</label>
+        <input type="text" id="exact-green" placeholder="1 or Good">
+      </div>
+      <div class="color-row">
+        <span class="color-dot yellow"></span>
+        <label>Yellow</label>
+        <input type="text" id="exact-yellow" placeholder="2 or Warning">
+      </div>
+      <div class="color-row">
+        <span class="color-dot red"></span>
+        <label>Red</label>
+        <input type="text" id="exact-red" placeholder="3 or Bad">
+      </div>
+      <p class="hint">Values matched case-insensitively.</p>
+    </div>
+
+    <!-- Numeric range inputs -->
+    <div id="range-section" class="hidden">
+      <div class="color-row">
+        <span class="color-dot green"></span>
+        <label>Green</label>
+        <div class="range-inputs">
+          <input type="number" id="range-green-min" placeholder="Min">
+          <input type="number" id="range-green-max" placeholder="Max">
+        </div>
+      </div>
+      <div class="color-row">
+        <span class="color-dot yellow"></span>
+        <label>Yellow</label>
+        <div class="range-inputs">
+          <input type="number" id="range-yellow-min" placeholder="Min">
+          <input type="number" id="range-yellow-max" placeholder="Max">
+        </div>
+      </div>
+      <div class="color-row">
+        <span class="color-dot red"></span>
+        <label>Red</label>
+        <div class="range-inputs">
+          <input type="number" id="range-red-min" placeholder="Min">
+          <input type="number" id="range-red-max" placeholder="Max">
+        </div>
+      </div>
+      <p class="hint">Leave Min or Max blank for unbounded. Ranges are inclusive.</p>
+    </div>
+  </div>
+
+  <div class="button-row">
+    <button class="btn" id="btn-cancel">Cancel</button>
+    <button class="btn primary" id="btn-save">Apply</button>
+  </div>
+
+  <script src="../lib/tableau.extensions.1.latest.min.js"></script>
+  <script>
+    (function () {
+      'use strict';
+
+      let currentMode = 'exact';
+
+      document.getElementById('mode-exact').addEventListener('click', () => setMode('exact'));
+      document.getElementById('mode-range').addEventListener('click', () => setMode('range'));
+
+      function setMode(mode) {
+        currentMode = mode;
+        document.getElementById('mode-exact').classList.toggle('active', mode === 'exact');
+        document.getElementById('mode-range').classList.toggle('active', mode === 'range');
+        document.getElementById('exact-section').classList.toggle('hidden', mode !== 'exact');
+        document.getElementById('range-section').classList.toggle('hidden', mode !== 'range');
+      }
+
+      tableau.extensions.initializeDialogAsync().then(() => {
+        const settings = tableau.extensions.settings;
+
+        // Restore label settings
+        const labelEnabled = settings.get('labelEnabled');
+        if (labelEnabled === 'false') document.getElementById('label-enabled').checked = false;
+        if (settings.get('labelGreen')) document.getElementById('label-green').value = settings.get('labelGreen');
+        if (settings.get('labelYellow')) document.getElementById('label-yellow').value = settings.get('labelYellow');
+        if (settings.get('labelRed')) document.getElementById('label-red').value = settings.get('labelRed');
+
+        // Restore tooltip settings
+        const tooltipEnabled = settings.get('tooltipEnabled');
+        if (tooltipEnabled === 'false') document.getElementById('tooltip-enabled').checked = false;
+
+        // Restore color mapping mode
+        const savedMode = settings.get('mode');
+        if (savedMode) setMode(savedMode);
+
+        // Restore exact match values
+        if (settings.get('exactGreen')) document.getElementById('exact-green').value = settings.get('exactGreen');
+        if (settings.get('exactYellow')) document.getElementById('exact-yellow').value = settings.get('exactYellow');
+        if (settings.get('exactRed')) document.getElementById('exact-red').value = settings.get('exactRed');
+
+        // Restore range values
+        if (settings.get('rangeGreenMin')) document.getElementById('range-green-min').value = settings.get('rangeGreenMin');
+        if (settings.get('rangeGreenMax')) document.getElementById('range-green-max').value = settings.get('rangeGreenMax');
+        if (settings.get('rangeYellowMin')) document.getElementById('range-yellow-min').value = settings.get('rangeYellowMin');
+        if (settings.get('rangeYellowMax')) document.getElementById('range-yellow-max').value = settings.get('rangeYellowMax');
+        if (settings.get('rangeRedMin')) document.getElementById('range-red-min').value = settings.get('rangeRedMin');
+        if (settings.get('rangeRedMax')) document.getElementById('range-red-max').value = settings.get('rangeRedMax');
+
+        // Save
+        document.getElementById('btn-save').addEventListener('click', () => {
+          settings.set('labelEnabled', document.getElementById('label-enabled').checked.toString());
+          settings.set('labelGreen', document.getElementById('label-green').value.trim());
+          settings.set('labelYellow', document.getElementById('label-yellow').value.trim());
+          settings.set('labelRed', document.getElementById('label-red').value.trim());
+          settings.set('tooltipEnabled', document.getElementById('tooltip-enabled').checked.toString());
+          settings.set('mode', currentMode);
+          settings.set('exactGreen', document.getElementById('exact-green').value.trim());
+          settings.set('exactYellow', document.getElementById('exact-yellow').value.trim());
+          settings.set('exactRed', document.getElementById('exact-red').value.trim());
+          settings.set('rangeGreenMin', document.getElementById('range-green-min').value.trim());
+          settings.set('rangeGreenMax', document.getElementById('range-green-max').value.trim());
+          settings.set('rangeYellowMin', document.getElementById('range-yellow-min').value.trim());
+          settings.set('rangeYellowMax', document.getElementById('range-yellow-max').value.trim());
+          settings.set('rangeRedMin', document.getElementById('range-red-min').value.trim());
+          settings.set('rangeRedMax', document.getElementById('range-red-max').value.trim());
+
+          settings.saveAsync().then(() => {
+            tableau.extensions.ui.closeDialog('saved');
+          });
+        });
+
+        // Cancel
+        document.getElementById('btn-cancel').addEventListener('click', () => {
+          tableau.extensions.ui.closeDialog('');
+        });
+      });
+    })();
+  </script>
+</body>
+</html>

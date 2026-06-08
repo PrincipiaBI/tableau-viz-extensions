@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest manifest-version="0.1" xmlns="http://www.tableau.com/xml/extension_manifest">
-  <worksheet-extension id="com.principiabi.stoplight.viz" extension-version="1.0.0">
+  <worksheet-extension id="com.principiabi.stoplight.viz" extension-version="2.0.0">
     <default-locale>en_US</default-locale>
     <name resource-id="name"/>
-    <description>Displays a traffic light (green/yellow/red) based on a Status field value</description>
+    <description>Displays a traffic light (green/yellow/red) based on a Status field value. Configurable via Format Extension.</description>
     <author name="PrincipiaBI" email="kevin.capp@principia.edu" organization="Principia" website="https://github.com/PrincipiaBI"/>
-    <min-api-version>1.1</min-api-version>
+    <min-api-version>1.12</min-api-version>
     <source-location>
       <url>https://principiabi.github.io/tableau-viz-extensions/stoplight-viz/index.html</url>
     </source-location>
@@ -13,10 +13,14 @@
     <permissions>
       <permission>full data</permission>
     </permissions>
+    <context-menu>
+      <configure-context-menu-item/>
+    </context-menu>
     <encoding id="status">
       <display-name>Status</display-name>
       <fields max-count="1"/>
       <encoding-icon token="color"/>
+      <tooltip>Drag the field that determines stoplight color (1=Green, 2=Yellow, 3=Red)</tooltip>
     </encoding>
   </worksheet-extension>
   <resources>

@@ -5,97 +5,24 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Stoplight Viz Extension</title>
   <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-
-    html, body {
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
-      background: transparent;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    }
-
-    body {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .stoplight-container {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      width: 100%;
-      height: 100%;
-      padding: 5%;
-    }
-
-    .stoplight {
-      background: #1a1a1a;
-      border-radius: 999px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-      border: 2px solid #333;
-    }
-
-    .light {
-      border-radius: 50%;
-      transition: all 0.4s ease;
-      border: 2px solid #333;
-    }
-
-    .light.red {
-      background: #3d0000;
-    }
-
-    .light.yellow {
-      background: #3d3000;
-    }
-
-    .light.green {
-      background: #003d00;
-    }
-
-    .light.red.active {
-      background: #ff0000;
-      box-shadow: 0 0 20px #ff0000, 0 0 40px rgba(255, 0, 0, 0.4);
-      border-color: #ff4444;
-    }
-
-    .light.yellow.active {
-      background: #ffcc00;
-      box-shadow: 0 0 20px #ffcc00, 0 0 40px rgba(255, 204, 0, 0.4);
-      border-color: #ffdd44;
-    }
-
-    .light.green.active {
-      background: #00cc00;
-      box-shadow: 0 0 20px #00cc00, 0 0 40px rgba(0, 204, 0, 0.4);
-      border-color: #44ff44;
-    }
-
-    .status-label {
-      font-size: 12px;
-      color: #666;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      text-align: center;
-    }
-
-    .prompt {
-      color: #888;
-      font-size: 14px;
-      text-align: center;
-      padding: 20px;
-    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: transparent;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+    body { display: flex; align-items: center; justify-content: center; }
+    .stoplight-container { display: flex; flex-direction: column; align-items: center;
+      justify-content: center; width: 100%; height: 100%; padding: 5%; }
+    .stoplight { background: #1a1a1a; border-radius: 999px; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      border: 2px solid #333; cursor: pointer; }
+    .light { border-radius: 50%; transition: all 0.4s ease; border: 2px solid #333; }
+    .light.red { background: #3d0000; }
+    .light.yellow { background: #3d3000; }
+    .light.green { background: #003d00; }
+    .light.red.active { background: #ff0000; box-shadow: 0 0 20px #ff0000, 0 0 40px rgba(255,0,0,0.4); border-color: #ff4444; }
+    .light.yellow.active { background: #ffcc00; box-shadow: 0 0 20px #ffcc00, 0 0 40px rgba(255,204,0,0.4); border-color: #ffdd44; }
+    .light.green.active { background: #00cc00; box-shadow: 0 0 20px #00cc00, 0 0 40px rgba(0,204,0,0.4); border-color: #44ff44; }
+    .status-label { font-size: 12px; color: #666; text-transform: uppercase; letter-spacing: 1px; text-align: center; }
+    .prompt { color: #888; font-size: 14px; text-align: center; padding: 20px; }
   </style>
 </head>
 <body>
@@ -112,13 +39,21 @@
   <script src="../lib/tableau.extensions.1.latest.min.js"></script>
   <script>
     'use strict';
-
     (function () {
       const ENCODING_ID = 'status';
-      const COLOR_MAP = { 1: 'green', 2: 'yellow', 3: 'red' };
-      const LABEL_MAP = { 1: 'On Track', 2: 'At Risk', 3: 'Off Track' };
+      const DEFAULT_EXACT = { green: '1', yellow: '2', red: '3' };
+      const DEFAULT_LABELS = { green: 'On Track', yellow: 'At Risk', red: 'Off Track' };
 
       let worksheet = null;
+      let currentTupleId = null;
+      let config = {
+        labelEnabled: true,
+        labels: { ...DEFAULT_LABELS },
+        tooltipEnabled: true,
+        mode: 'exact',
+        exact: { ...DEFAULT_EXACT },
+        range: { green: { min: null, max: null }, yellow: { min: null, max: null }, red: { min: null, max: null } }
+      };
 
       // --- Responsive sizing ---
       function resizeStoplight() {
@@ -126,54 +61,127 @@
         const stoplight = document.getElementById('stoplight');
         const lights = document.querySelectorAll('.light');
         const label = document.getElementById('status-label');
-
         const w = container.clientWidth;
         const h = container.clientHeight;
-
         const maxByHeight = (h * 0.70) / 3.6;
         const maxByWidth = w * 0.55;
         const lightSize = Math.max(Math.min(maxByHeight, maxByWidth), 16);
-
-        lights.forEach(light => {
-          light.style.width = lightSize + 'px';
-          light.style.height = lightSize + 'px';
-        });
-
+        lights.forEach(light => { light.style.width = lightSize + 'px'; light.style.height = lightSize + 'px'; });
         const gap = lightSize * 0.15;
         const padding = lightSize * 0.25;
         stoplight.style.padding = padding + 'px ' + (padding * 0.8) + 'px';
         stoplight.style.gap = gap + 'px';
         stoplight.style.borderRadius = (lightSize * 0.6) + 'px';
-
         label.style.marginTop = (lightSize * 0.15) + 'px';
         label.style.fontSize = Math.max(Math.min(lightSize * 0.22, 16), 9) + 'px';
       }
 
-      const observer = new ResizeObserver(resizeStoplight);
-      observer.observe(document.getElementById('container'));
+      const resizeObs = new ResizeObserver(resizeStoplight);
+      resizeObs.observe(document.getElementById('container'));
       resizeStoplight();
 
-      // --- Initialize viz extension ---
-      window.onload = tableau.extensions.initializeAsync().then(() => {
-        worksheet = tableau.extensions.worksheetContent.worksheet;
+      // --- Tooltip on hover ---
+      const stoplightEl = document.getElementById('stoplight');
+      stoplightEl.addEventListener('mousemove', function (e) {
+        if (!worksheet || !config.tooltipEnabled || currentTupleId === null) return;
+        worksheet.hoverTupleAsync(currentTupleId, {
+          tooltipAnchorPoint: { x: e.pageX, y: e.pageY }
+        }).catch(() => {});
+      });
+      stoplightEl.addEventListener('mouseleave', function () {
+        if (!worksheet || !config.tooltipEnabled) return;
+        worksheet.hoverTupleAsync(0, { tooltipAnchorPoint: { x: 0, y: 0 } }).catch(() => {});
+      });
 
-        // Listen for data changes (field dragged, filter applied, etc.)
-        worksheet.addEventListener(
-          tableau.TableauEventType.SummaryDataChanged,
-          updateDataAndRender
+      // --- Load config from settings ---
+      function loadConfig() {
+        const s = tableau.extensions.settings;
+        config.labelEnabled = s.get('labelEnabled') !== 'false';
+        config.labels.green = s.get('labelGreen') || DEFAULT_LABELS.green;
+        config.labels.yellow = s.get('labelYellow') || DEFAULT_LABELS.yellow;
+        config.labels.red = s.get('labelRed') || DEFAULT_LABELS.red;
+        config.tooltipEnabled = s.get('tooltipEnabled') !== 'false';
+        config.mode = s.get('mode') || 'exact';
+        config.exact.green = s.get('exactGreen') || DEFAULT_EXACT.green;
+        config.exact.yellow = s.get('exactYellow') || DEFAULT_EXACT.yellow;
+        config.exact.red = s.get('exactRed') || DEFAULT_EXACT.red;
+        config.range.green.min = parseNum(s.get('rangeGreenMin'));
+        config.range.green.max = parseNum(s.get('rangeGreenMax'));
+        config.range.yellow.min = parseNum(s.get('rangeYellowMin'));
+        config.range.yellow.max = parseNum(s.get('rangeYellowMax'));
+        config.range.red.min = parseNum(s.get('rangeRedMin'));
+        config.range.red.max = parseNum(s.get('rangeRedMax'));
+      }
+
+      function parseNum(val) {
+        if (val === null || val === undefined || val === '') return null;
+        const n = parseFloat(val);
+        return isNaN(n) ? null : n;
+      }
+
+      // --- Color determination ---
+      function getColor(rawValue) {
+        if (config.mode === 'exact') {
+          const val = String(rawValue).trim().toLowerCase();
+          if (val === config.exact.green.toLowerCase()) return 'green';
+          if (val === config.exact.yellow.toLowerCase()) return 'yellow';
+          if (val === config.exact.red.toLowerCase()) return 'red';
+          // Fallback text matching
+          if (['green', 'good', 'on track'].includes(val)) return 'green';
+          if (['yellow', 'warning', 'at risk'].includes(val)) return 'yellow';
+          if (['red', 'bad', 'off track'].includes(val)) return 'red';
+          return null;
+        } else {
+          const num = parseFloat(rawValue);
+          if (isNaN(num)) return null;
+          if (inRange(num, config.range.green)) return 'green';
+          if (inRange(num, config.range.yellow)) return 'yellow';
+          if (inRange(num, config.range.red)) return 'red';
+          return null;
+        }
+      }
+
+      function inRange(num, range) {
+        const minOk = (range.min === null) || (num >= range.min);
+        const maxOk = (range.max === null) || (num <= range.max);
+        return minOk && maxOk;
+      }
+
+      // --- Configure dialog ---
+      function showConfig() {
+        const popupUrl = window.location.href.replace('index.html', 'config.html');
+        tableau.extensions.ui.displayDialogAsync(popupUrl, '', { height: 520, width: 400 })
+          .then(() => { loadConfig(); updateDataAndRender(); })
+          .catch(error => {
+            if (error.errorCode !== tableau.ErrorCodes.DialogClosedByUser) {
+              console.error('[Stoplight Viz] Config error:', error);
+            }
+          });
+      }
+
+      // --- Initialize viz extension ---
+      window.onload = tableau.extensions.initializeAsync({ configure: showConfig }).then(() => {
+        worksheet = tableau.extensions.worksheetContent.worksheet;
+        loadConfig();
+
+        worksheet.addEventListener(tableau.TableauEventType.SummaryDataChanged, updateDataAndRender);
+
+        // Listen for settings changes (in case saved externally)
+        tableau.extensions.settings.addEventListener(
+          tableau.TableauEventType.SettingsChanged,
+          () => { loadConfig(); updateDataAndRender(); }
         );
 
-        // Initial render
         updateDataAndRender();
       }, function (err) {
         console.error('[Stoplight Viz] Init failed:', err);
         setLabel('Init error');
       });
 
+      // --- Main render ---
       async function updateDataAndRender() {
         if (!worksheet) return;
 
-        // Get encoding specification to find which field is on the "status" tile
         const visualSpec = await worksheet.getVisualSpecificationAsync();
         const marksCard = visualSpec.marksSpecifications[visualSpec.activeMarksSpecificationIndex];
 
@@ -186,29 +194,26 @@
         }
 
         if (!statusFieldName) {
-          // No field on the Status encoding tile yet
           setStoplight(null);
           setLabel('');
           showPrompt(true);
+          currentTupleId = null;
           return;
         }
 
         showPrompt(false);
 
-        // Get the summary data
         const dataTableReader = await worksheet.getSummaryDataReaderAsync();
         const dataTable = await dataTableReader.getAllPagesAsync();
         await dataTableReader.releaseAsync();
 
-        // Find the status column index
         const columns = dataTable.columns;
-        const colIndex = columns.findIndex(
-          col => col.fieldName === statusFieldName
-        );
+        const colIndex = columns.findIndex(col => col.fieldName === statusFieldName);
 
         if (colIndex === -1) {
           setStoplight(null);
           setLabel('Field not found');
+          currentTupleId = null;
           return;
         }
 
@@ -216,33 +221,26 @@
         if (rows.length === 0) {
           setStoplight(null);
           setLabel('No data');
+          currentTupleId = null;
           return;
         }
 
-        // Read first row's value
-        const rawValue = rows[0][colIndex].value;
-        const numValue = parseInt(rawValue, 10);
+        // Store tupleId for tooltip (1-based index)
+        currentTupleId = 1;
 
-        // Try numeric match first (1=green, 2=yellow, 3=red)
-        if (COLOR_MAP[numValue]) {
-          setStoplight(COLOR_MAP[numValue]);
-          setLabel(LABEL_MAP[numValue]);
-        } else {
-          // Try case-insensitive text match
-          const textVal = String(rawValue).trim().toLowerCase();
-          if (textVal === 'green' || textVal === 'good' || textVal === 'on track') {
-            setStoplight('green');
-            setLabel('On Track');
-          } else if (textVal === 'yellow' || textVal === 'warning' || textVal === 'at risk') {
-            setStoplight('yellow');
-            setLabel('At Risk');
-          } else if (textVal === 'red' || textVal === 'bad' || textVal === 'off track') {
-            setStoplight('red');
-            setLabel('Off Track');
+        const rawValue = rows[0][colIndex].value;
+        const color = getColor(rawValue);
+
+        if (color) {
+          setStoplight(color);
+          if (config.labelEnabled) {
+            setLabel(config.labels[color]);
           } else {
-            setStoplight(null);
-            setLabel('Unknown: ' + rawValue);
+            setLabel('');
           }
+        } else {
+          setStoplight(null);
+          setLabel(config.labelEnabled ? 'Unknown: ' + rawValue : '');
         }
       }
 
