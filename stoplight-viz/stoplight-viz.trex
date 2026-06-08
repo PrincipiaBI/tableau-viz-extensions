@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest manifest-version="0.1" xmlns="http://www.tableau.com/xml/extension_manifest">
+  <worksheet-extension id="com.principiabi.stoplight.viz" extension-version="1.0.0">
+    <default-locale>en_US</default-locale>
+    <name resource-id="name"/>
+    <description>Displays a traffic light (green/yellow/red) based on a Status field value</description>
+    <author name="PrincipiaBI" email="kevin.capp@principia.edu" organization="Principia" website="https://github.com/PrincipiaBI"/>
+    <min-api-version>1.1</min-api-version>
+    <source-location>
+      <url>https://principiabi.github.io/tableau-viz-extensions/stoplight-viz/index.html</url>
+    </source-location>
+    <icon/>
+    <permissions>
+      <permission>full data</permission>
+    </permissions>
+    <encoding id="status">
+      <display-name>Status</display-name>
+      <fields max-count="1"/>
+      <encoding-icon token="color"/>
+    </encoding>
+  </worksheet-extension>
+  <resources>
+    <resource id="name">
+      <text locale="en_US">Stoplight</text>
+    </resource>
+  </resources>
+</manifest>

@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Stoplight Viz Extension</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: transparent;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .stoplight-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      height: 100%;
+      padding: 5%;
+    }
+
+    .stoplight {
+      background: #1a1a1a;
+      border-radius: 999px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+      border: 2px solid #333;
+    }
+
+    .light {
+      border-radius: 50%;
+      transition: all 0.4s ease;
+      border: 2px solid #333;
+    }
+
+    .light.red {
+      background: #3d0000;
+    }
+
+    .light.yellow {
+      background: #3d3000;
+    }
+
+    .light.green {
+      background: #003d00;
+    }
+
+    .light.red.active {
+      background: #ff0000;
+      box-shadow: 0 0 20px #ff0000, 0 0 40px rgba(255, 0, 0, 0.4);
+      border-color: #ff4444;
+    }
+
+    .light.yellow.active {
+      background: #ffcc00;
+      box-shadow: 0 0 20px #ffcc00, 0 0 40px rgba(255, 204, 0, 0.4);
+      border-color: #ffdd44;
+    }
+
+    .light.green.active {
+      background: #00cc00;
+      box-shadow: 0 0 20px #00cc00, 0 0 40px rgba(0, 204, 0, 0.4);
+      border-color: #44ff44;
+    }
+
+    .status-label {
+      font-size: 12px;
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      text-align: center;
+    }
+
+    .prompt {
+      color: #888;
+      font-size: 14px;
+      text-align: center;
+      padding: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div class="stoplight-container" id="container">
+    <div class="stoplight" id="stoplight">
+      <div class="light red" id="light-red"></div>
+      <div class="light yellow" id="light-yellow"></div>
+      <div class="light green" id="light-green"></div>
+    </div>
+    <div class="status-label" id="status-label"></div>
+    <div class="prompt" id="prompt">Drag a field onto the <b>Status</b> tile on the Marks card.</div>
+  </div>
+
+  <script src="../lib/tableau.extensions.1.latest.min.js"></script>
+  <script>
+    'use strict';
+
+    (function () {
+      const ENCODING_ID = 'status';
+      const COLOR_MAP = { 1: 'green', 2: 'yellow', 3: 'red' };
+      const LABEL_MAP = { 1: 'On Track', 2: 'At Risk', 3: 'Off Track' };
+
+      let worksheet = null;
+
+      // --- Responsive sizing ---
+      function resizeStoplight() {
+        const container = document.getElementById('container');
+        const stoplight = document.getElementById('stoplight');
+        const lights = document.querySelectorAll('.light');
+        const label = document.getElementById('status-label');
+
+        const w = container.clientWidth;
+        const h = container.clientHeight;
+
+        const maxByHeight = (h * 0.70) / 3.6;
+        const maxByWidth = w * 0.55;
+        const lightSize = Math.max(Math.min(maxByHeight, maxByWidth), 16);
+
+        lights.forEach(light => {
+          light.style.width = lightSize + 'px';
+          light.style.height = lightSize + 'px';
+        });
+
+        const gap = lightSize * 0.15;
+        const padding = lightSize * 0.25;
+        stoplight.style.padding = padding + 'px ' + (padding * 0.8) + 'px';
+        stoplight.style.gap = gap + 'px';
+        stoplight.style.borderRadius = (lightSize * 0.6) + 'px';
+
+        label.style.marginTop = (lightSize * 0.15) + 'px';
+        label.style.fontSize = Math.max(Math.min(lightSize * 0.22, 16), 9) + 'px';
+      }
+
+      const observer = new ResizeObserver(resizeStoplight);
+      observer.observe(document.getElementById('container'));
+      resizeStoplight();
+
+      // --- Initialize viz extension ---
+      window.onload = tableau.extensions.initializeAsync().then(() => {
+        worksheet = tableau.extensions.worksheetContent.worksheet;
+
+        // Listen for data changes (field dragged, filter applied, etc.)
+        worksheet.addEventListener(
+          tableau.TableauEventType.SummaryDataChanged,
+          updateDataAndRender
+        );
+
+        // Initial render
+        updateDataAndRender();
+      }, function (err) {
+        console.error('[Stoplight Viz] Init failed:', err);
+        setLabel('Init error');
+      });
+
+      async function updateDataAndRender() {
+        if (!worksheet) return;
+
+        // Get encoding specification to find which field is on the "status" tile
+        const visualSpec = await worksheet.getVisualSpecificationAsync();
+        const marksCard = visualSpec.marksSpecifications[visualSpec.activeMarksSpecificationIndex];
+
+        let statusFieldName = null;
+        for (const encoding of marksCard.encodings) {
+          if (encoding.id === ENCODING_ID && encoding.field) {
+            statusFieldName = encoding.field.name;
+            break;
+          }
+        }
+
+        if (!statusFieldName) {
+          // No field on the Status encoding tile yet
+          setStoplight(null);
+          setLabel('');
+          showPrompt(true);
+          return;
+        }
+
+        showPrompt(false);
+
+        // Get the summary data
+        const dataTableReader = await worksheet.getSummaryDataReaderAsync();
+        const dataTable = await dataTableReader.getAllPagesAsync();
+        await dataTableReader.releaseAsync();
+
+        // Find the status column index
+        const columns = dataTable.columns;
+        const colIndex = columns.findIndex(
+          col => col.fieldName === statusFieldName
+        );
+
+        if (colIndex === -1) {
+          setStoplight(null);
+          setLabel('Field not found');
+          return;
+        }
+
+        const rows = dataTable.data;
+        if (rows.length === 0) {
+          setStoplight(null);
+          setLabel('No data');
+          return;
+        }
+
+        // Read first row's value
+        const rawValue = rows[0][colIndex].value;
+        const numValue = parseInt(rawValue, 10);
+
+        // Try numeric match first (1=green, 2=yellow, 3=red)
+        if (COLOR_MAP[numValue]) {
+          setStoplight(COLOR_MAP[numValue]);
+          setLabel(LABEL_MAP[numValue]);
+        } else {
+          // Try case-insensitive text match
+          const textVal = String(rawValue).trim().toLowerCase();
+          if (textVal === 'green' || textVal === 'good' || textVal === 'on track') {
+            setStoplight('green');
+            setLabel('On Track');
+          } else if (textVal === 'yellow' || textVal === 'warning' || textVal === 'at risk') {
+            setStoplight('yellow');
+            setLabel('At Risk');
+          } else if (textVal === 'red' || textVal === 'bad' || textVal === 'off track') {
+            setStoplight('red');
+            setLabel('Off Track');
+          } else {
+            setStoplight(null);
+            setLabel('Unknown: ' + rawValue);
+          }
+        }
+      }
+
+      function setStoplight(color) {
+        ['red', 'yellow', 'green'].forEach(c => {
+          document.getElementById('light-' + c).classList.toggle('active', c === color);
+        });
+      }
+
+      function setLabel(text) {
+        document.getElementById('status-label').textContent = text || '';
+      }
+
+      function showPrompt(show) {
+        document.getElementById('prompt').style.display = show ? 'block' : 'none';
+      }
+    })();
+  </script>
+</body>
+</html>
