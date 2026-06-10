@@ -1,19 +1,55 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest manifest-version="0.1" xmlns="http://www.tableau.com/xml/extension_manifest">
-  <dashboard-extension id="com.principiabi.admissions-funnel" extension-version="1.0.0">
+  <worksheet-extension id="com.principiabi.admissions-funnel" extension-version="1.0.0">
     <default-locale>en_US</default-locale>
     <name resource-id="name"/>
-    <description>Vertical stepped admissions funnel with traffic-light coloring and configurable stages</description>
+    <description>Vertical stepped admissions funnel with traffic-light coloring for admissions pipeline</description>
     <author name="PrincipiaBI" email="kevin.capp@principia.edu" organization="Principia" website="https://github.com/PrincipiaBI"/>
-    <min-api-version>1.4</min-api-version>
+    <min-api-version>1.1</min-api-version>
     <source-location>
       <url>https://principiabi.github.io/tableau-viz-extensions/admissions-funnel/index.html</url>
     </source-location>
-    <icon>iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAALEwAACxMBAJqcGAAAAlhJREFUOI2Nkt9vy1EYh5/3+6Nd13VFK2xoJkziR4yQiLhBuMKFP8ALf4BIhEQQP+IXNkwisqm22tJWt9a2Xa22X985LkYkdnGyJ+d5n/fkfI8S//DB3sp6n5r1fSCVy0hPPpM5mU0l2862LAb4GbULy+b6z2pLlQgmhOCoKNnTMo2T65OTL3/fUR1or5A/st2+ENi2FxaUd57a/hT1AOBcaijZNHh1VIuMNhqNnb8AOvBfUYn246Cf4NFsJnuqGIns+b+okigIjuNHkw8QXPcKEEaEdJ/vS0M0NvQZuOf7/qmZ6emVvwISMGk4ONbSz+rMxN2/BcIJUAF5dHFr8cyBRCJjjQymcKclm3VVq9Wm/0ogAAORSPSTlakpXRCRzxpjzjy+fDl6IJE4Pjs9TdZ1AXNvIJE4w+AWMEaEdJ/vS0M0NvQZuA==</icon>
+    <icon/>
     <permissions>
       <permission>full data</permission>
     </permissions>
-  </dashboard-extension>
+    <encoding id="stage">
+      <display-name>Stage</display-name>
+      <data-spec>
+        <data-type>string</data-type>
+      </data-spec>
+      <role-spec>
+        <role-type>discrete-dimension</role-type>
+      </role-spec>
+      <fields max-count="1"/>
+      <encoding-icon token="level"/>
+      <tooltip>Drag the funnel stage field here (e.g. FUNNEL_STAGE)</tooltip>
+    </encoding>
+    <encoding id="actual">
+      <display-name>Actual</display-name>
+      <data-spec>
+        <data-type>numeric</data-type>
+      </data-spec>
+      <role-spec>
+        <role-type>continuous-measure</role-type>
+      </role-spec>
+      <fields max-count="1"/>
+      <encoding-icon token="metric"/>
+      <tooltip>Drag the actual count measure here (e.g. ACTUAL_COUNT)</tooltip>
+    </encoding>
+    <encoding id="goal">
+      <display-name>Goal</display-name>
+      <data-spec>
+        <data-type>numeric</data-type>
+      </data-spec>
+      <role-spec>
+        <role-type>continuous-measure</role-type>
+      </role-spec>
+      <fields max-count="1"/>
+      <encoding-icon token="dot"/>
+      <tooltip>Drag the goal count measure here (e.g. GOAL_COUNT)</tooltip>
+    </encoding>
+  </worksheet-extension>
   <resources>
     <resource id="name">
       <text locale="en_US">Admissions Funnel</text>

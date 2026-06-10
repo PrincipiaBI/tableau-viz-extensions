@@ -29,7 +29,6 @@
       width: 100%;
       height: 100%;
       padding: 3% 5%;
-      gap: 0;
     }
 
     .funnel-stage {
@@ -40,10 +39,9 @@
       position: relative;
       transition: all 0.3s ease;
       cursor: default;
-      border-radius: 4px;
       color: #ffffff;
       text-align: center;
-      padding: 2% 3%;
+      clip-path: polygon(0% 0%, 100% 0%, 95% 100%, 5% 100%);
     }
 
     .funnel-stage .stage-label {
@@ -52,11 +50,14 @@
       letter-spacing: 0.5px;
       opacity: 0.95;
       white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 90%;
     }
 
     .funnel-stage .stage-actual {
       font-weight: 700;
-      line-height: 1.1;
+      line-height: 1.15;
     }
 
     .funnel-stage .stage-goal {
@@ -65,15 +66,15 @@
     }
 
     /* Traffic-light colors */
-    .funnel-stage.color-green { background: #2e8b57; }
-    .funnel-stage.color-amber { background: #d4820f; }
-    .funnel-stage.color-red { background: #c0392b; }
-    .funnel-stage.color-none { background: #7f8c8d; }
+    .color-green { background: #2e8b57; }
+    .color-amber { background: #d4820f; }
+    .color-red   { background: #c0392b; }
+    .color-none  { background: #7f8c8d; }
 
     /* Tooltip */
     .tooltip {
       position: absolute;
-      left: 105%;
+      left: calc(100% + 12px);
       top: 50%;
       transform: translateY(-50%);
       background: #2c3e50;
@@ -81,13 +82,13 @@
       padding: 10px 14px;
       border-radius: 6px;
       font-size: 12px;
-      line-height: 1.5;
+      line-height: 1.6;
       white-space: nowrap;
       z-index: 1000;
       opacity: 0;
       pointer-events: none;
       transition: opacity 0.2s ease;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
     }
 
     .tooltip::before {
@@ -119,26 +120,45 @@
     }
 
     .tooltip .tt-label { opacity: 0.7; }
-    .tooltip .tt-value { font-weight: 600; }
-
+    .tooltip .tt-value { font-weight: 600; text-align: right; }
     .tooltip .tt-positive { color: #2ecc71; }
     .tooltip .tt-negative { color: #e74c3c; }
 
-    /* No data state */
-    .no-data {
+    /* Prompt state */
+    .prompt {
       display: flex;
+      flex-direction: column;
       align-items: center;
       justify-content: center;
       width: 100%;
       height: 100%;
       color: #999;
       font-size: 14px;
+      text-align: center;
+      padding: 20px;
+      line-height: 1.6;
+    }
+
+    .prompt .prompt-icon {
+      font-size: 36px;
+      margin-bottom: 12px;
+      opacity: 0.5;
+    }
+
+    .prompt .prompt-detail {
+      font-size: 12px;
+      color: #bbb;
+      margin-top: 6px;
     }
   </style>
 </head>
 <body>
   <div class="funnel-container" id="funnel-container">
-    <div class="no-data" id="no-data">Configure extension to display funnel</div>
+    <div class="prompt" id="prompt">
+      <div class="prompt-icon">&#9660;</div>
+      <div>Drag fields onto the Marks card to build the funnel</div>
+      <div class="prompt-detail">Stage (dimension) &bull; Actual (measure) &bull; Goal (measure)</div>
+    </div>
   </div>
 
   <script src="../lib/tableau.extensions.1.latest.min.js"></script>
@@ -146,44 +166,47 @@
     (function () {
       'use strict';
 
-      let currentWorksheet = null;
-      let unregisterFilterListener = null;
-      let unregisterMarkListener = null;
+      // Stage ordering for the admissions funnel
+      const STAGE_ORDER = ['inquiry', 'application', 'admit', 'commit'];
 
-      const DEFAULT_STAGES = [
-        { id: '1', label: 'Inquiries', actualCol: '', goalCol: '', priorYearCol: '', definition: 'Students who have expressed interest' },
-        { id: '2', label: 'Applications', actualCol: '', goalCol: '', priorYearCol: '', definition: 'Students who submitted an application' },
-        { id: '3', label: 'Admits', actualCol: '', goalCol: '', priorYearCol: '', definition: 'Students offered admission' },
-        { id: '4', label: 'Commits', actualCol: '', goalCol: '', priorYearCol: '', definition: 'Students who confirmed enrollment' }
-      ];
+      // Thresholds
+      const THRESHOLD_RED = 90;
+      const THRESHOLD_GREEN = 100;
 
-      let config = {
-        stages: DEFAULT_STAGES,
-        thresholds: { red: 90, green: 100 },
-        colors: { green: '#2e8b57', amber: '#d4820f', red: '#c0392b' },
-        abbreviateNumbers: true,
-        showTooltips: true,
-        showGoals: true
+      // Colors
+      const COLORS = {
+        green: '#2e8b57',
+        amber: '#d4820f',
+        red: '#c0392b',
+        none: '#7f8c8d'
       };
 
       // --- Number formatting ---
       function formatNumber(val) {
-        if (val === null || val === undefined || isNaN(val)) return '—';
+        if (val === null || val === undefined || isNaN(val)) return '\u2014';
         const num = Number(val);
-        if (!config.abbreviateNumbers || num < 10000) {
-          return num.toLocaleString();
-        }
         if (num >= 1000000) return (num / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
-        return (num / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
+        if (num >= 10000) return (num / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
+        return num.toLocaleString();
       }
 
       // --- Color logic ---
-      function getColorClass(actual, goal) {
-        if (goal === null || goal === 0 || actual === null) return 'color-none';
+      function getColor(actual, goal) {
+        if (goal === null || goal === 0 || actual === null) return 'none';
         const pct = (actual / goal) * 100;
-        if (pct >= config.thresholds.green) return 'color-green';
-        if (pct >= config.thresholds.red) return 'color-amber';
-        return 'color-red';
+        if (pct >= THRESHOLD_GREEN) return 'green';
+        if (pct >= THRESHOLD_RED) return 'amber';
+        return 'red';
+      }
+
+      // --- Sort stages by known funnel order ---
+      function stageSort(a, b) {
+        const aIdx = STAGE_ORDER.indexOf(a.stage.toLowerCase());
+        const bIdx = STAGE_ORDER.indexOf(b.stage.toLowerCase());
+        if (aIdx === -1 && bIdx === -1) return 0;
+        if (aIdx === -1) return 1;
+        if (bIdx === -1) return -1;
+        return aIdx - bIdx;
       }
 
       // --- Responsive sizing ---
@@ -196,93 +219,73 @@
         const h = container.clientHeight;
         const numStages = stages.length;
 
-        const gapPx = Math.max(2, h * 0.01);
+        const gapPx = Math.max(2, h * 0.008);
         const availableHeight = h - (gapPx * (numStages - 1));
         const stageHeight = Math.floor(availableHeight / numStages);
 
-        const maxWidth = w * 0.92;
-        const minWidth = w * 0.30;
+        const maxWidth = w * 0.94;
+        const minWidth = w * 0.35;
         const widthStep = (maxWidth - minWidth) / Math.max(numStages - 1, 1);
 
         const baseFontSize = Math.min(w, h);
-        const labelSize = Math.max(Math.min(baseFontSize * 0.028, 13), 9);
-        const actualSize = Math.max(Math.min(baseFontSize * 0.06, 32), 16);
+        const labelSize = Math.max(Math.min(baseFontSize * 0.028, 14), 9);
+        const actualSize = Math.max(Math.min(baseFontSize * 0.065, 36), 16);
         const goalSize = Math.max(Math.min(baseFontSize * 0.022, 12), 8);
 
-        const hideGoals = stageHeight < 50;
+        const hideGoals = stageHeight < 55;
 
-        stages.forEach((stage, i) => {
+        stages.forEach(function (stage, i) {
           const stageWidth = maxWidth - (widthStep * i);
           stage.style.width = stageWidth + 'px';
           stage.style.height = stageHeight + 'px';
           stage.style.marginBottom = (i < numStages - 1) ? gapPx + 'px' : '0';
 
-          const labelEl = stage.querySelector('.stage-label');
-          const actualEl = stage.querySelector('.stage-actual');
-          const goalEl = stage.querySelector('.stage-goal');
+          var labelEl = stage.querySelector('.stage-label');
+          var actualEl = stage.querySelector('.stage-actual');
+          var goalEl = stage.querySelector('.stage-goal');
 
           if (labelEl) labelEl.style.fontSize = labelSize + 'px';
           if (actualEl) actualEl.style.fontSize = actualSize + 'px';
           if (goalEl) {
             goalEl.style.fontSize = goalSize + 'px';
-            goalEl.style.display = (hideGoals || !config.showGoals) ? 'none' : 'block';
-          }
-        });
-
-        // Position tooltips - flip to left if not enough room on right
-        stages.forEach(stage => {
-          const tooltip = stage.querySelector('.tooltip');
-          if (!tooltip) return;
-          const rect = stage.getBoundingClientRect();
-          const tooltipWidth = 220;
-          if (rect.right + tooltipWidth > window.innerWidth) {
-            tooltip.style.left = 'auto';
-            tooltip.style.right = '105%';
-            tooltip.querySelector('.tt-arrow')?.remove();
+            goalEl.style.display = hideGoals ? 'none' : 'block';
           }
         });
       }
 
-      const observer = new ResizeObserver(resizeFunnel);
-      observer.observe(document.getElementById('funnel-container'));
+      var resizeObserver = new ResizeObserver(resizeFunnel);
+      resizeObserver.observe(document.getElementById('funnel-container'));
 
       // --- Render funnel ---
       function renderFunnel(stageData) {
-        const container = document.getElementById('funnel-container');
-        const noData = document.getElementById('no-data');
+        var container = document.getElementById('funnel-container');
+        var prompt = document.getElementById('prompt');
+
+        // Clear existing stages
+        container.querySelectorAll('.funnel-stage').forEach(function (el) { el.remove(); });
 
         if (!stageData || stageData.length === 0) {
-          noData.style.display = 'flex';
-          container.querySelectorAll('.funnel-stage').forEach(el => el.remove());
+          prompt.style.display = 'flex';
           return;
         }
 
-        noData.style.display = 'none';
+        prompt.style.display = 'none';
 
-        // Remove existing stages
-        container.querySelectorAll('.funnel-stage').forEach(el => el.remove());
+        stageData.forEach(function (data) {
+          var color = getColor(data.actual, data.goal);
+          var el = document.createElement('div');
+          el.className = 'funnel-stage color-' + color;
+          el.style.background = COLORS[color];
 
-        stageData.forEach(stage => {
-          const colorClass = getColorClass(stage.actual, stage.goal);
-          const el = document.createElement('div');
-          el.className = 'funnel-stage ' + colorClass;
-
-          // Apply custom colors
-          if (colorClass === 'color-green') el.style.background = config.colors.green;
-          else if (colorClass === 'color-amber') el.style.background = config.colors.amber;
-          else if (colorClass === 'color-red') el.style.background = config.colors.red;
-
-          let html = '';
-          html += '<div class="stage-label">' + escapeHtml(stage.label) + '</div>';
-          html += '<div class="stage-actual">' + formatNumber(stage.actual) + '</div>';
-          if (config.showGoals && stage.goal !== null) {
-            html += '<div class="stage-goal">Goal: ' + formatNumber(stage.goal) + '</div>';
+          var html = '';
+          html += '<div class="stage-label">' + escapeHtml(data.stage) + '</div>';
+          html += '<div class="stage-actual">' + formatNumber(data.actual) + '</div>';
+          if (data.goal !== null) {
+            html += '<div class="stage-goal">Goal: ' + formatNumber(data.goal) + '</div>';
           }
 
           // Tooltip
-          if (config.showTooltips) {
-            html += buildTooltip(stage);
-          }
+          html += buildTooltip(data);
 
           el.innerHTML = html;
           container.appendChild(el);
@@ -291,22 +294,16 @@
         resizeFunnel();
       }
 
-      function buildTooltip(stage) {
-        const pct = (stage.goal && stage.goal > 0) ? ((stage.actual / stage.goal) * 100).toFixed(1) : null;
-        const variance = (stage.goal !== null && stage.actual !== null) ? stage.actual - stage.goal : null;
-        const pyDiff = (stage.priorYear !== null && stage.actual !== null) ? stage.actual - stage.priorYear : null;
+      function buildTooltip(data) {
+        var pct = (data.goal && data.goal > 0) ? ((data.actual / data.goal) * 100).toFixed(1) : null;
+        var variance = (data.goal !== null && data.actual !== null) ? data.actual - data.goal : null;
 
-        let html = '<div class="tooltip">';
-        html += '<div class="tt-title">' + escapeHtml(stage.label) + '</div>';
+        var html = '<div class="tooltip">';
+        html += '<div class="tt-title">' + escapeHtml(data.stage) + '</div>';
+        html += '<div class="tt-row"><span class="tt-label">Current</span><span class="tt-value">' + formatNumber(data.actual) + '</span></div>';
 
-        if (stage.definition) {
-          html += '<div class="tt-row"><span class="tt-label" style="opacity:0.8;font-style:italic;">' + escapeHtml(stage.definition) + '</span></div>';
-        }
-
-        html += '<div class="tt-row"><span class="tt-label">Current</span><span class="tt-value">' + formatNumber(stage.actual) + '</span></div>';
-
-        if (stage.goal !== null) {
-          html += '<div class="tt-row"><span class="tt-label">Goal</span><span class="tt-value">' + formatNumber(stage.goal) + '</span></div>';
+        if (data.goal !== null) {
+          html += '<div class="tt-row"><span class="tt-label">Goal</span><span class="tt-value">' + formatNumber(data.goal) + '</span></div>';
         }
 
         if (pct !== null) {
@@ -314,15 +311,9 @@
         }
 
         if (variance !== null) {
-          const varClass = variance >= 0 ? 'tt-positive' : 'tt-negative';
-          const varSign = variance >= 0 ? '+' : '';
+          var varClass = variance >= 0 ? 'tt-positive' : 'tt-negative';
+          var varSign = variance >= 0 ? '+' : '';
           html += '<div class="tt-row"><span class="tt-label">Variance</span><span class="tt-value ' + varClass + '">' + varSign + formatNumber(variance) + '</span></div>';
-        }
-
-        if (stage.priorYear !== null) {
-          const pyClass = pyDiff >= 0 ? 'tt-positive' : 'tt-negative';
-          const pySign = pyDiff >= 0 ? '+' : '';
-          html += '<div class="tt-row"><span class="tt-label">Prior Year Final</span><span class="tt-value">' + formatNumber(stage.priorYear) + ' <span class="' + pyClass + '">(' + pySign + formatNumber(pyDiff) + ')</span></span></div>';
         }
 
         html += '</div>';
@@ -331,146 +322,130 @@
 
       function escapeHtml(str) {
         if (!str) return '';
-        return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
       }
 
-      // --- Load config from settings ---
-      function loadConfig() {
-        const settings = tableau.extensions.settings;
+      // --- Viz Extension Initialization ---
+      window.onload = tableau.extensions.initializeAsync().then(function () {
+        var worksheet = tableau.extensions.worksheetContent.worksheet;
 
-        const stagesJson = settings.get('stages');
-        if (stagesJson) {
-          try { config.stages = JSON.parse(stagesJson); } catch (e) { /* keep defaults */ }
-        }
+        // Listen for data changes (filters, marks, field adds/removes)
+        worksheet.addEventListener(
+          tableau.TableauEventType.SummaryDataChanged,
+          function () { updateDataAndRender(); }
+        );
 
-        const thresholdRed = settings.get('thresholdRed');
-        const thresholdGreen = settings.get('thresholdGreen');
-        if (thresholdRed) config.thresholds.red = parseFloat(thresholdRed);
-        if (thresholdGreen) config.thresholds.green = parseFloat(thresholdGreen);
-
-        const colorGreen = settings.get('colorGreen');
-        const colorAmber = settings.get('colorAmber');
-        const colorRed = settings.get('colorRed');
-        if (colorGreen) config.colors.green = colorGreen;
-        if (colorAmber) config.colors.amber = colorAmber;
-        if (colorRed) config.colors.red = colorRed;
-
-        config.abbreviateNumbers = settings.get('abbreviateNumbers') !== 'false';
-        config.showTooltips = settings.get('showTooltips') !== 'false';
-        config.showGoals = settings.get('showGoals') !== 'false';
-      }
-
-      // --- Fetch data from Tableau ---
-      function refreshData() {
-        if (!currentWorksheet) return;
-
-        currentWorksheet.getSummaryDataAsync().then(dataTable => {
-          const columns = dataTable.columns;
-          const rows = dataTable.data;
-
-          if (rows.length === 0) {
-            renderFunnel([]);
-            return;
-          }
-
-          // Build column index lookup (case-insensitive, normalized)
-          const colMap = {};
-          columns.forEach((col, idx) => {
-            const key = col.fieldName.toUpperCase().replace(/\s+/g, '_');
-            colMap[key] = idx;
-          });
-
-          // Find value by column name (case-insensitive fuzzy match)
-          function findValue(colName) {
-            if (!colName) return null;
-            const target = colName.toUpperCase().replace(/\s+/g, '_');
-
-            // Exact match first
-            if (colMap[target] !== undefined) {
-              const val = rows[0][colMap[target]].value;
-              return parseFloat(val) || 0;
-            }
-
-            // Partial match
-            for (const key of Object.keys(colMap)) {
-              if (key.indexOf(target) !== -1 || target.indexOf(key) !== -1) {
-                const val = rows[0][colMap[key]].value;
-                return parseFloat(val) || 0;
-              }
-            }
-            return null;
-          }
-
-          // Map each configured stage to its data
-          const stageData = config.stages.map(stage => ({
-            label: stage.label,
-            actual: findValue(stage.actualCol),
-            goal: findValue(stage.goalCol),
-            priorYear: findValue(stage.priorYearCol),
-            definition: stage.definition || ''
-          }));
-
-          renderFunnel(stageData);
-        }).catch(err => {
-          console.error('[Funnel] Data error:', err);
-          renderFunnel([]);
-        });
-      }
-
-      // --- Tableau Extension Init ---
-      tableau.extensions.initializeAsync({ configure: showConfig }).then(() => {
-        loadConfig();
-        const savedSheet = tableau.extensions.settings.get('worksheet');
-        if (savedSheet) {
-          loadWorksheet(savedSheet);
-        } else {
-          showConfig();
-        }
-      }).catch(err => {
-        console.error('[Funnel] Init failed:', err);
-        document.getElementById('no-data').textContent = 'Extension init error';
+        // Initial render
+        updateDataAndRender();
+      }, function (err) {
+        console.error('[Funnel] Init error:', err);
+        document.getElementById('prompt').innerHTML = '<div>Extension init error</div>';
       });
 
-      function showConfig() {
-        const popupUrl = window.location.href.replace('index.html', 'config.html');
-        tableau.extensions.ui.displayDialogAsync(popupUrl, '', { height: 620, width: 520 })
-          .then(() => {
-            loadConfig();
-            const savedSheet = tableau.extensions.settings.get('worksheet');
-            if (savedSheet) loadWorksheet(savedSheet);
-          })
-          .catch(error => {
-            if (error.errorCode === tableau.ErrorCodes.DialogClosedByUser) {
-              loadConfig();
-              const savedSheet = tableau.extensions.settings.get('worksheet');
-              if (savedSheet) loadWorksheet(savedSheet);
-            }
-          });
-      }
+      // --- Fetch data and render ---
+      async function updateDataAndRender() {
+        var worksheet = tableau.extensions.worksheetContent.worksheet;
 
-      function loadWorksheet(sheetName) {
-        const dashboard = tableau.extensions.dashboardContent.dashboard;
-        const worksheet = dashboard.worksheets.find(ws => ws.name === sheetName);
+        // Get encoding map to find which fields are on which encoding tile
+        var encodingMap = await getEncodingMap(worksheet);
 
-        if (!worksheet) {
-          document.getElementById('no-data').textContent = 'Worksheet "' + sheetName + '" not found';
-          document.getElementById('no-data').style.display = 'flex';
+        if (!encodingMap.stage) {
+          renderFunnel([]);
           return;
         }
 
-        if (unregisterFilterListener) unregisterFilterListener();
-        if (unregisterMarkListener) unregisterMarkListener();
+        // Get the data from the worksheet
+        var dataReader = await worksheet.getSummaryDataReaderAsync(undefined, { ignoreSelection: true });
+        var stageData = [];
 
-        currentWorksheet = worksheet;
+        for (var page = 0; page < dataReader.pageCount; page++) {
+          var dataTable = await dataReader.getPageAsync(page);
+          var columns = dataTable.columns;
 
-        unregisterFilterListener = worksheet.addEventListener(
-          tableau.TableauEventType.FilterChanged, () => refreshData()
-        );
-        unregisterMarkListener = worksheet.addEventListener(
-          tableau.TableauEventType.MarkSelectionChanged, () => refreshData()
-        );
+          // Build column index map
+          var colIdx = {};
+          columns.forEach(function (col, i) {
+            colIdx[col.fieldName] = i;
+          });
 
-        refreshData();
+          var stageColIdx = colIdx[encodingMap.stage];
+          var actualColIdx = encodingMap.actual !== null ? colIdx[encodingMap.actual] : null;
+          var goalColIdx = encodingMap.goal !== null ? colIdx[encodingMap.goal] : null;
+
+          // If stage column not found in data, try case-insensitive match
+          if (stageColIdx === undefined) {
+            var stageUpper = encodingMap.stage.toUpperCase();
+            for (var key in colIdx) {
+              if (key.toUpperCase() === stageUpper) { stageColIdx = colIdx[key]; break; }
+            }
+          }
+          if (actualColIdx === undefined && encodingMap.actual) {
+            var actUpper = encodingMap.actual.toUpperCase();
+            for (var key in colIdx) {
+              if (key.toUpperCase() === actUpper) { actualColIdx = colIdx[key]; break; }
+            }
+          }
+          if (goalColIdx === undefined && encodingMap.goal) {
+            var goalUpper = encodingMap.goal.toUpperCase();
+            for (var key in colIdx) {
+              if (key.toUpperCase() === goalUpper) { goalColIdx = colIdx[key]; break; }
+            }
+          }
+
+          if (stageColIdx === undefined) {
+            renderFunnel([]);
+            await dataReader.releaseAsync();
+            return;
+          }
+
+          // Process rows
+          for (var r = 0; r < dataTable.data.length; r++) {
+            var row = dataTable.data[r];
+            var stageName = row[stageColIdx].formattedValue || row[stageColIdx].value;
+            var actual = actualColIdx !== null && actualColIdx !== undefined ? parseFloat(row[actualColIdx].value) : null;
+            var goal = goalColIdx !== null && goalColIdx !== undefined ? parseFloat(row[goalColIdx].value) : null;
+
+            if (stageName && stageName !== 'Null' && stageName !== '%null%') {
+              stageData.push({
+                stage: String(stageName),
+                actual: isNaN(actual) ? null : actual,
+                goal: isNaN(goal) ? null : goal
+              });
+            }
+          }
+        }
+
+        await dataReader.releaseAsync();
+
+        // Sort by funnel order
+        stageData.sort(stageSort);
+
+        renderFunnel(stageData);
+      }
+
+      // --- Get encoding map from visual specification ---
+      async function getEncodingMap(worksheet) {
+        var map = { stage: null, actual: null, goal: null };
+
+        try {
+          var visualSpec = await worksheet.getVisualSpecificationAsync();
+          var marksCard = visualSpec.marksSpecifications[visualSpec.activeMarksSpecificationIndex];
+
+          for (var i = 0; i < marksCard.encodings.length; i++) {
+            var enc = marksCard.encodings[i];
+            if (enc.id === 'stage' && enc.field) {
+              map.stage = enc.field.name;
+            } else if (enc.id === 'actual' && enc.field) {
+              map.actual = enc.field.name;
+            } else if (enc.id === 'goal' && enc.field) {
+              map.goal = enc.field.name;
+            }
+          }
+        } catch (e) {
+          console.error('[Funnel] Error reading encodings:', e);
+        }
+
+        return map;
       }
     })();
   </script>
