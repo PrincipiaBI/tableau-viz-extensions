@@ -88,64 +88,47 @@
         { label: 'Enrollment',         path: 'Enrollment' },
         { label: 'Student Success',    path: 'StudentSuccess' },
         { label: 'Operational Health', path: 'Operations' },
-        { label: 'Open1',             path: 'Open1' }
+        { label: 'Open1',              path: 'Open1' }
       ];
 
-      // Base path pattern to detect and construct URLs
-      var WORKBOOK_PATH = '/views/TrusteeDashboard/';
+      // Tableau Cloud base URL and workbook name
+      var TABLEAU_BASE = 'https://us-east-1.online.tableau.com/#/site/principia_prod/views/TrusteeDashboard/';
       // =====================================================================
 
-      // Detect the current dashboard from the parent URL
-      function getCurrentPath() {
+      // Detect the current dashboard name from the Tableau API
+      function getCurrentDashboardName() {
         try {
-          var href = window.top.location.href;
-          var idx = href.indexOf(WORKBOOK_PATH);
-          if (idx !== -1) {
-            var after = href.substring(idx + WORKBOOK_PATH.length);
-            // Strip query params and hash fragments after the path
-            var end = after.search(/[?&#]/);
-            return end !== -1 ? after.substring(0, end) : after;
-          }
+          return tableau.extensions.dashboardContent.dashboard.name;
         } catch (e) {
-          // Cross-origin — can't read parent URL
+          return null;
         }
-        return null;
       }
 
-      // Navigate to a dashboard
+      // Navigate to a dashboard using top-level navigation
       function navigateTo(path) {
-        try {
-          var href = window.top.location.href;
-          var idx = href.indexOf(WORKBOOK_PATH);
-          if (idx !== -1) {
-            var base = href.substring(0, idx + WORKBOOK_PATH.length);
-            // Preserve any query params from the original URL
-            var afterPath = href.substring(idx + WORKBOOK_PATH.length);
-            var qIdx = afterPath.search(/[?&#]/);
-            var queryPart = qIdx !== -1 ? afterPath.substring(qIdx) : '';
-            window.top.location.href = base + path + queryPart;
-          } else {
-            // Fallback: construct full URL
-            window.top.location.href = href.replace(/\/[^/]*$/, '/' + path);
-          }
-        } catch (e) {
-          console.error('[TrusteeNav] Navigation error:', e);
-        }
+        var url = TABLEAU_BASE + encodeURIComponent(path).replace(/%20/g, '%20');
+        // window.open with _top works from Tableau Cloud extension iframes
+        window.open(url, '_top');
       }
 
       // Render buttons
       function renderButtons() {
         var container = document.getElementById('nav-container');
-        var currentPath = getCurrentPath();
+        var currentDashboard = getCurrentDashboardName();
 
         BUTTONS.forEach(function (btn) {
           var el = document.createElement('div');
           el.className = 'nav-btn';
           el.textContent = btn.label;
 
-          // Check if this is the active button
-          if (currentPath && currentPath.toLowerCase() === btn.path.toLowerCase()) {
-            el.classList.add('active');
+          // Check if this is the active button by comparing dashboard name to path
+          // Dashboard name in Tableau may differ from URL path, so compare case-insensitive
+          if (currentDashboard) {
+            var dashNorm = currentDashboard.toLowerCase().replace(/\s+/g, '');
+            var pathNorm = btn.path.toLowerCase().replace(/\s+/g, '');
+            if (dashNorm === pathNorm) {
+              el.classList.add('active');
+            }
           }
 
           el.addEventListener('click', function () {
