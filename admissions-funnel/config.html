@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Format Admissions Funnel</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      padding: 20px;
+      background: #f8f9fa;
+      color: #333;
+      font-size: 13px;
+    }
+    h2 { font-size: 15px; margin-bottom: 14px; color: #1a1a1a; }
+    h3 { font-size: 13px; margin-bottom: 8px; color: #333; border-bottom: 1px solid #e0e0e0; padding-bottom: 4px; margin-top: 16px; }
+    .section { margin-bottom: 14px; }
+    label { display: block; font-size: 12px; font-weight: 500; margin-bottom: 4px; color: #555; }
+    input[type="number"] {
+      width: 100%; padding: 5px 8px; font-size: 12px;
+      border: 1px solid #ccc; border-radius: 4px; background: #fff; margin-bottom: 10px;
+    }
+    input[type="color"] {
+      width: 100%; height: 32px; padding: 2px; border: 1px solid #ccc;
+      border-radius: 4px; cursor: pointer; margin-bottom: 10px;
+    }
+    input:focus { outline: none; border-color: #4a90d9; box-shadow: 0 0 0 2px rgba(74,144,217,0.2); }
+    .toggle-row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+    .toggle-row label { margin-bottom: 0; flex: 1; }
+    input[type="checkbox"] { width: 16px; height: 16px; }
+    .color-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+    .color-row label { width: 60px; margin-bottom: 0; font-size: 12px; }
+    .color-row input[type="color"] { width: 50px; height: 28px; margin-bottom: 0; flex-shrink: 0; }
+    .color-row input[type="number"] { width: 70px; margin-bottom: 0; }
+    .color-row span { font-size: 11px; color: #888; }
+    .button-row { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; border-top: 1px solid #e0e0e0; padding-top: 14px; }
+    button.btn { padding: 7px 18px; font-size: 12px; border-radius: 4px; cursor: pointer; border: 1px solid #ccc; background: #fff; color: #333; }
+    button.btn:hover { background: #f0f0f0; }
+    button.btn.primary { background: #4a90d9; color: #fff; border-color: #4a90d9; }
+    button.btn.primary:hover { background: #3a7bc8; }
+    .hint { font-size: 10px; color: #999; margin-top: -6px; margin-bottom: 8px; }
+  </style>
+</head>
+<body>
+  <h2>Format Admissions Funnel</h2>
+
+  <!-- Color Thresholds -->
+  <div class="section">
+    <h3>Color Thresholds</h3>
+    <div class="color-row">
+      <label>Red below</label>
+      <input type="number" id="threshold-red" value="90" min="0" max="200">
+      <span>%</span>
+      <input type="color" id="color-red" value="#c0392b">
+    </div>
+    <div class="color-row">
+      <label>Amber below</label>
+      <input type="number" id="threshold-green" value="100" min="0" max="200">
+      <span>%</span>
+      <input type="color" id="color-amber" value="#d4820f">
+    </div>
+    <div class="color-row">
+      <label>Green at/above</label>
+      <span style="width:70px; text-align:center;">&mdash;</span>
+      <span></span>
+      <input type="color" id="color-green" value="#2e8b57">
+    </div>
+    <p class="hint">Red = below first threshold. Amber = between. Green = at or above second threshold.</p>
+  </div>
+
+  <!-- Display Options -->
+  <div class="section">
+    <h3>Display</h3>
+    <div class="toggle-row">
+      <input type="checkbox" id="opt-abbreviate" checked>
+      <label for="opt-abbreviate">Abbreviate large numbers (10K+)</label>
+    </div>
+    <div class="toggle-row">
+      <input type="checkbox" id="opt-goals" checked>
+      <label for="opt-goals">Show goal values in funnel</label>
+    </div>
+    <div class="toggle-row">
+      <input type="checkbox" id="opt-tooltips" checked>
+      <label for="opt-tooltips">Show tooltip on hover</label>
+    </div>
+    <p class="hint">Configure tooltip content via the Tooltip tile on the Marks card.</p>
+  </div>
+
+  <div class="button-row">
+    <button class="btn" id="btn-cancel">Cancel</button>
+    <button class="btn primary" id="btn-save">Apply</button>
+  </div>
+
+  <script src="../lib/tableau.extensions.1.latest.min.js"></script>
+  <script>
+    (function () {
+      'use strict';
+
+      tableau.extensions.initializeDialogAsync().then(function () {
+        var settings = tableau.extensions.settings;
+
+        // Restore saved settings
+        var tr = settings.get('thresholdRed');
+        var tg = settings.get('thresholdGreen');
+        if (tr) document.getElementById('threshold-red').value = tr;
+        if (tg) document.getElementById('threshold-green').value = tg;
+
+        var cg = settings.get('colorGreen');
+        var ca = settings.get('colorAmber');
+        var cr = settings.get('colorRed');
+        if (cg) document.getElementById('color-green').value = cg;
+        if (ca) document.getElementById('color-amber').value = ca;
+        if (cr) document.getElementById('color-red').value = cr;
+
+        if (settings.get('abbreviateNumbers') === 'false') document.getElementById('opt-abbreviate').checked = false;
+        if (settings.get('showGoals') === 'false') document.getElementById('opt-goals').checked = false;
+        if (settings.get('tooltipEnabled') === 'false') document.getElementById('opt-tooltips').checked = false;
+
+        // Save
+        document.getElementById('btn-save').addEventListener('click', function () {
+          settings.set('thresholdRed', document.getElementById('threshold-red').value.trim());
+          settings.set('thresholdGreen', document.getElementById('threshold-green').value.trim());
+          settings.set('colorGreen', document.getElementById('color-green').value);
+          settings.set('colorAmber', document.getElementById('color-amber').value);
+          settings.set('colorRed', document.getElementById('color-red').value);
+          settings.set('abbreviateNumbers', document.getElementById('opt-abbreviate').checked.toString());
+          settings.set('showGoals', document.getElementById('opt-goals').checked.toString());
+          settings.set('tooltipEnabled', document.getElementById('opt-tooltips').checked.toString());
+
+          settings.saveAsync().then(function () {
+            tableau.extensions.ui.closeDialog('saved');
+          });
+        });
+
+        // Cancel
+        document.getElementById('btn-cancel').addEventListener('click', function () {
+          tableau.extensions.ui.closeDialog('');
+        });
+      });
+    })();
+  </script>
+</body>
+</html>

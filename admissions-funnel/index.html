@@ -38,10 +38,14 @@
       justify-content: center;
       position: relative;
       transition: all 0.3s ease;
-      cursor: default;
+      cursor: pointer;
       color: #ffffff;
       text-align: center;
       clip-path: polygon(0% 0%, 100% 0%, 95% 100%, 5% 100%);
+    }
+
+    .funnel-stage:hover {
+      filter: brightness(1.1);
     }
 
     .funnel-stage .stage-label {
@@ -64,65 +68,6 @@
       opacity: 0.85;
       white-space: nowrap;
     }
-
-    /* Traffic-light colors */
-    .color-green { background: #2e8b57; }
-    .color-amber { background: #d4820f; }
-    .color-red   { background: #c0392b; }
-    .color-none  { background: #7f8c8d; }
-
-    /* Tooltip */
-    .tooltip {
-      position: absolute;
-      left: calc(100% + 12px);
-      top: 50%;
-      transform: translateY(-50%);
-      background: #2c3e50;
-      color: #ecf0f1;
-      padding: 10px 14px;
-      border-radius: 6px;
-      font-size: 12px;
-      line-height: 1.6;
-      white-space: nowrap;
-      z-index: 1000;
-      opacity: 0;
-      pointer-events: none;
-      transition: opacity 0.2s ease;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-    }
-
-    .tooltip::before {
-      content: '';
-      position: absolute;
-      right: 100%;
-      top: 50%;
-      transform: translateY(-50%);
-      border: 6px solid transparent;
-      border-right-color: #2c3e50;
-    }
-
-    .funnel-stage:hover .tooltip {
-      opacity: 1;
-    }
-
-    .tooltip .tt-title {
-      font-weight: 700;
-      font-size: 13px;
-      margin-bottom: 4px;
-      border-bottom: 1px solid rgba(255,255,255,0.2);
-      padding-bottom: 4px;
-    }
-
-    .tooltip .tt-row {
-      display: flex;
-      justify-content: space-between;
-      gap: 16px;
-    }
-
-    .tooltip .tt-label { opacity: 0.7; }
-    .tooltip .tt-value { font-weight: 600; text-align: right; }
-    .tooltip .tt-positive { color: #2ecc71; }
-    .tooltip .tt-negative { color: #e74c3c; }
 
     /* Prompt state */
     .prompt {
@@ -163,28 +108,33 @@
 
   <script src="../lib/tableau.extensions.1.latest.min.js"></script>
   <script>
+    'use strict';
     (function () {
-      'use strict';
 
       // Stage ordering for the admissions funnel
-      const STAGE_ORDER = ['inquiry', 'application', 'admit', 'commit'];
+      var STAGE_ORDER = ['inquiry', 'application', 'admit', 'commit'];
 
-      // Thresholds
-      const THRESHOLD_RED = 90;
-      const THRESHOLD_GREEN = 100;
-
-      // Colors
-      const COLORS = {
-        green: '#2e8b57',
-        amber: '#d4820f',
-        red: '#c0392b',
-        none: '#7f8c8d'
+      // Default configuration
+      var config = {
+        thresholdRed: 90,
+        thresholdGreen: 100,
+        colorGreen: '#2e8b57',
+        colorAmber: '#d4820f',
+        colorRed: '#c0392b',
+        abbreviateNumbers: true,
+        showGoals: true,
+        tooltipEnabled: true
       };
+
+      var worksheet = null;
+      // Store tupleIds per stage for tooltip
+      var stageTupleIds = [];
 
       // --- Number formatting ---
       function formatNumber(val) {
         if (val === null || val === undefined || isNaN(val)) return '\u2014';
-        const num = Number(val);
+        var num = Number(val);
+        if (!config.abbreviateNumbers) return num.toLocaleString();
         if (num >= 1000000) return (num / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
         if (num >= 10000) return (num / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
         return num.toLocaleString();
@@ -193,16 +143,23 @@
       // --- Color logic ---
       function getColor(actual, goal) {
         if (goal === null || goal === 0 || actual === null) return 'none';
-        const pct = (actual / goal) * 100;
-        if (pct >= THRESHOLD_GREEN) return 'green';
-        if (pct >= THRESHOLD_RED) return 'amber';
+        var pct = (actual / goal) * 100;
+        if (pct >= config.thresholdGreen) return 'green';
+        if (pct >= config.thresholdRed) return 'amber';
         return 'red';
+      }
+
+      function getColorHex(colorName) {
+        if (colorName === 'green') return config.colorGreen;
+        if (colorName === 'amber') return config.colorAmber;
+        if (colorName === 'red') return config.colorRed;
+        return '#7f8c8d';
       }
 
       // --- Sort stages by known funnel order ---
       function stageSort(a, b) {
-        const aIdx = STAGE_ORDER.indexOf(a.stage.toLowerCase());
-        const bIdx = STAGE_ORDER.indexOf(b.stage.toLowerCase());
+        var aIdx = STAGE_ORDER.indexOf(a.stage.toLowerCase());
+        var bIdx = STAGE_ORDER.indexOf(b.stage.toLowerCase());
         if (aIdx === -1 && bIdx === -1) return 0;
         if (aIdx === -1) return 1;
         if (bIdx === -1) return -1;
@@ -211,31 +168,31 @@
 
       // --- Responsive sizing ---
       function resizeFunnel() {
-        const container = document.getElementById('funnel-container');
-        const stages = container.querySelectorAll('.funnel-stage');
+        var container = document.getElementById('funnel-container');
+        var stages = container.querySelectorAll('.funnel-stage');
         if (stages.length === 0) return;
 
-        const w = container.clientWidth;
-        const h = container.clientHeight;
-        const numStages = stages.length;
+        var w = container.clientWidth;
+        var h = container.clientHeight;
+        var numStages = stages.length;
 
-        const gapPx = Math.max(2, h * 0.008);
-        const availableHeight = h - (gapPx * (numStages - 1));
-        const stageHeight = Math.floor(availableHeight / numStages);
+        var gapPx = Math.max(2, h * 0.008);
+        var availableHeight = h - (gapPx * (numStages - 1));
+        var stageHeight = Math.floor(availableHeight / numStages);
 
-        const maxWidth = w * 0.94;
-        const minWidth = w * 0.35;
-        const widthStep = (maxWidth - minWidth) / Math.max(numStages - 1, 1);
+        var maxWidth = w * 0.94;
+        var minWidth = w * 0.35;
+        var widthStep = (maxWidth - minWidth) / Math.max(numStages - 1, 1);
 
-        const baseFontSize = Math.min(w, h);
-        const labelSize = Math.max(Math.min(baseFontSize * 0.028, 14), 9);
-        const actualSize = Math.max(Math.min(baseFontSize * 0.065, 36), 16);
-        const goalSize = Math.max(Math.min(baseFontSize * 0.022, 12), 8);
+        var baseFontSize = Math.min(w, h);
+        var labelSize = Math.max(Math.min(baseFontSize * 0.028, 14), 9);
+        var actualSize = Math.max(Math.min(baseFontSize * 0.065, 36), 16);
+        var goalSize = Math.max(Math.min(baseFontSize * 0.022, 12), 8);
 
-        const hideGoals = stageHeight < 55;
+        var hideGoals = stageHeight < 55;
 
         stages.forEach(function (stage, i) {
-          const stageWidth = maxWidth - (widthStep * i);
+          var stageWidth = maxWidth - (widthStep * i);
           stage.style.width = stageWidth + 'px';
           stage.style.height = stageHeight + 'px';
           stage.style.marginBottom = (i < numStages - 1) ? gapPx + 'px' : '0';
@@ -248,7 +205,7 @@
           if (actualEl) actualEl.style.fontSize = actualSize + 'px';
           if (goalEl) {
             goalEl.style.fontSize = goalSize + 'px';
-            goalEl.style.display = hideGoals ? 'none' : 'block';
+            goalEl.style.display = (hideGoals || !config.showGoals) ? 'none' : 'block';
           }
         });
       }
@@ -271,53 +228,44 @@
 
         prompt.style.display = 'none';
 
-        stageData.forEach(function (data) {
+        stageData.forEach(function (data, idx) {
           var color = getColor(data.actual, data.goal);
           var el = document.createElement('div');
-          el.className = 'funnel-stage color-' + color;
-          el.style.background = COLORS[color];
+          el.className = 'funnel-stage';
+          el.style.background = getColorHex(color);
+          el.dataset.index = idx;
 
           var html = '';
           html += '<div class="stage-label">' + escapeHtml(data.stage) + '</div>';
           html += '<div class="stage-actual">' + formatNumber(data.actual) + '</div>';
-          if (data.goal !== null) {
+          if (config.showGoals && data.goal !== null) {
             html += '<div class="stage-goal">Goal: ' + formatNumber(data.goal) + '</div>';
           }
 
-          // Tooltip
-          html += buildTooltip(data);
-
           el.innerHTML = html;
+
+          // Tooltip: native Tableau tooltip via hoverTupleAsync
+          el.addEventListener('mousemove', function (e) {
+            if (!worksheet || !config.tooltipEnabled) return;
+            var stageIdx = parseInt(el.dataset.index);
+            var tupleId = stageTupleIds[stageIdx];
+            if (tupleId === null || tupleId === undefined) return;
+            worksheet.hoverTupleAsync(tupleId, {
+              tooltipAnchorPoint: { x: e.pageX, y: e.pageY }
+            }).catch(function () {});
+          });
+
+          el.addEventListener('mouseleave', function () {
+            if (!worksheet || !config.tooltipEnabled) return;
+            worksheet.hoverTupleAsync(0, {
+              tooltipAnchorPoint: { x: 0, y: 0 }
+            }).catch(function () {});
+          });
+
           container.appendChild(el);
         });
 
         resizeFunnel();
-      }
-
-      function buildTooltip(data) {
-        var pct = (data.goal && data.goal > 0) ? ((data.actual / data.goal) * 100).toFixed(1) : null;
-        var variance = (data.goal !== null && data.actual !== null) ? data.actual - data.goal : null;
-
-        var html = '<div class="tooltip">';
-        html += '<div class="tt-title">' + escapeHtml(data.stage) + '</div>';
-        html += '<div class="tt-row"><span class="tt-label">Current</span><span class="tt-value">' + formatNumber(data.actual) + '</span></div>';
-
-        if (data.goal !== null) {
-          html += '<div class="tt-row"><span class="tt-label">Goal</span><span class="tt-value">' + formatNumber(data.goal) + '</span></div>';
-        }
-
-        if (pct !== null) {
-          html += '<div class="tt-row"><span class="tt-label">% to Goal</span><span class="tt-value">' + pct + '%</span></div>';
-        }
-
-        if (variance !== null) {
-          var varClass = variance >= 0 ? 'tt-positive' : 'tt-negative';
-          var varSign = variance >= 0 ? '+' : '';
-          html += '<div class="tt-row"><span class="tt-label">Variance</span><span class="tt-value ' + varClass + '">' + varSign + formatNumber(variance) + '</span></div>';
-        }
-
-        html += '</div>';
-        return html;
       }
 
       function escapeHtml(str) {
@@ -325,126 +273,153 @@
         return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
       }
 
-      // --- Viz Extension Initialization ---
-      window.onload = tableau.extensions.initializeAsync().then(function () {
-        var worksheet = tableau.extensions.worksheetContent.worksheet;
+      // --- Load config from settings ---
+      function loadConfig() {
+        var s = tableau.extensions.settings;
+        var tr = s.get('thresholdRed');
+        var tg = s.get('thresholdGreen');
+        if (tr) config.thresholdRed = parseFloat(tr);
+        if (tg) config.thresholdGreen = parseFloat(tg);
 
-        // Listen for data changes (filters, marks, field adds/removes)
-        worksheet.addEventListener(
-          tableau.TableauEventType.SummaryDataChanged,
-          function () { updateDataAndRender(); }
+        var cg = s.get('colorGreen');
+        var ca = s.get('colorAmber');
+        var cr = s.get('colorRed');
+        if (cg) config.colorGreen = cg;
+        if (ca) config.colorAmber = ca;
+        if (cr) config.colorRed = cr;
+
+        config.abbreviateNumbers = s.get('abbreviateNumbers') !== 'false';
+        config.showGoals = s.get('showGoals') !== 'false';
+        config.tooltipEnabled = s.get('tooltipEnabled') !== 'false';
+      }
+
+      // --- Configure dialog ---
+      function showConfig() {
+        var popupUrl = window.location.href.replace('index.html', 'config.html');
+        tableau.extensions.ui.displayDialogAsync(popupUrl, '', { height: 450, width: 400 })
+          .then(function () { loadConfig(); updateDataAndRender(); })
+          .catch(function (error) {
+            if (error.errorCode !== tableau.ErrorCodes.DialogClosedByUser) {
+              console.error('[Funnel] Config error:', error);
+            }
+          });
+      }
+
+      // --- Initialize viz extension ---
+      window.onload = tableau.extensions.initializeAsync({ configure: showConfig }).then(function () {
+        worksheet = tableau.extensions.worksheetContent.worksheet;
+        loadConfig();
+
+        worksheet.addEventListener(tableau.TableauEventType.SummaryDataChanged, updateDataAndRender);
+
+        tableau.extensions.settings.addEventListener(
+          tableau.TableauEventType.SettingsChanged,
+          function () { loadConfig(); updateDataAndRender(); }
         );
 
-        // Initial render
         updateDataAndRender();
       }, function (err) {
-        console.error('[Funnel] Init error:', err);
+        console.error('[Funnel] Init failed:', err);
         document.getElementById('prompt').innerHTML = '<div>Extension init error</div>';
       });
 
       // --- Fetch data and render ---
       async function updateDataAndRender() {
-        var worksheet = tableau.extensions.worksheetContent.worksheet;
+        if (!worksheet) return;
 
-        // Get encoding map to find which fields are on which encoding tile
+        // Get encoding map
         var encodingMap = await getEncodingMap(worksheet);
 
         if (!encodingMap.stage) {
+          stageTupleIds = [];
           renderFunnel([]);
           return;
         }
 
-        // Get the data from the worksheet
-        var dataReader = await worksheet.getSummaryDataReaderAsync(undefined, { ignoreSelection: true });
+        // Get the data
+        var dataTableReader = await worksheet.getSummaryDataReaderAsync();
+        var dataTable = await dataTableReader.getAllPagesAsync();
+        await dataTableReader.releaseAsync();
+
+        var columns = dataTable.columns;
+        var rows = dataTable.data;
+
+        if (rows.length === 0) {
+          stageTupleIds = [];
+          renderFunnel([]);
+          return;
+        }
+
+        // Build column index map
+        var colIdx = {};
+        columns.forEach(function (col, i) { colIdx[col.fieldName] = i; });
+
+        // Find columns (case-insensitive fallback)
+        var stageColIdx = findColIdx(colIdx, encodingMap.stage);
+        var actualColIdx = encodingMap.actual ? findColIdx(colIdx, encodingMap.actual) : null;
+        var goalColIdx = encodingMap.goal ? findColIdx(colIdx, encodingMap.goal) : null;
+
+        if (stageColIdx === null) {
+          stageTupleIds = [];
+          renderFunnel([]);
+          return;
+        }
+
+        // Process rows
         var stageData = [];
+        var tupleIds = [];
 
-        for (var page = 0; page < dataReader.pageCount; page++) {
-          var dataTable = await dataReader.getPageAsync(page);
-          var columns = dataTable.columns;
+        for (var r = 0; r < rows.length; r++) {
+          var row = rows[r];
+          var stageName = row[stageColIdx].formattedValue || row[stageColIdx].value;
+          var actual = actualColIdx !== null ? parseFloat(row[actualColIdx].value) : null;
+          var goal = goalColIdx !== null ? parseFloat(row[goalColIdx].value) : null;
 
-          // Build column index map
-          var colIdx = {};
-          columns.forEach(function (col, i) {
-            colIdx[col.fieldName] = i;
-          });
-
-          var stageColIdx = colIdx[encodingMap.stage];
-          var actualColIdx = encodingMap.actual !== null ? colIdx[encodingMap.actual] : null;
-          var goalColIdx = encodingMap.goal !== null ? colIdx[encodingMap.goal] : null;
-
-          // If stage column not found in data, try case-insensitive match
-          if (stageColIdx === undefined) {
-            var stageUpper = encodingMap.stage.toUpperCase();
-            for (var key in colIdx) {
-              if (key.toUpperCase() === stageUpper) { stageColIdx = colIdx[key]; break; }
-            }
-          }
-          if (actualColIdx === undefined && encodingMap.actual) {
-            var actUpper = encodingMap.actual.toUpperCase();
-            for (var key in colIdx) {
-              if (key.toUpperCase() === actUpper) { actualColIdx = colIdx[key]; break; }
-            }
-          }
-          if (goalColIdx === undefined && encodingMap.goal) {
-            var goalUpper = encodingMap.goal.toUpperCase();
-            for (var key in colIdx) {
-              if (key.toUpperCase() === goalUpper) { goalColIdx = colIdx[key]; break; }
-            }
-          }
-
-          if (stageColIdx === undefined) {
-            renderFunnel([]);
-            await dataReader.releaseAsync();
-            return;
-          }
-
-          // Process rows
-          for (var r = 0; r < dataTable.data.length; r++) {
-            var row = dataTable.data[r];
-            var stageName = row[stageColIdx].formattedValue || row[stageColIdx].value;
-            var actual = actualColIdx !== null && actualColIdx !== undefined ? parseFloat(row[actualColIdx].value) : null;
-            var goal = goalColIdx !== null && goalColIdx !== undefined ? parseFloat(row[goalColIdx].value) : null;
-
-            if (stageName && stageName !== 'Null' && stageName !== '%null%') {
-              stageData.push({
-                stage: String(stageName),
-                actual: isNaN(actual) ? null : actual,
-                goal: isNaN(goal) ? null : goal
-              });
-            }
+          if (stageName && stageName !== 'Null' && stageName !== '%null%') {
+            stageData.push({
+              stage: String(stageName),
+              actual: isNaN(actual) ? null : actual,
+              goal: isNaN(goal) ? null : goal
+            });
+            // tupleId is 1-based row index
+            tupleIds.push(r + 1);
           }
         }
 
-        await dataReader.releaseAsync();
-
         // Sort by funnel order
-        stageData.sort(stageSort);
+        var sortedIndices = stageData.map(function (d, i) { return i; });
+        sortedIndices.sort(function (a, b) { return stageSort(stageData[a], stageData[b]); });
 
-        renderFunnel(stageData);
+        var sortedData = sortedIndices.map(function (i) { return stageData[i]; });
+        stageTupleIds = sortedIndices.map(function (i) { return tupleIds[i]; });
+
+        renderFunnel(sortedData);
+      }
+
+      function findColIdx(colIdx, fieldName) {
+        if (colIdx[fieldName] !== undefined) return colIdx[fieldName];
+        var upper = fieldName.toUpperCase();
+        for (var key in colIdx) {
+          if (key.toUpperCase() === upper) return colIdx[key];
+        }
+        return null;
       }
 
       // --- Get encoding map from visual specification ---
-      async function getEncodingMap(worksheet) {
+      async function getEncodingMap(ws) {
         var map = { stage: null, actual: null, goal: null };
-
         try {
-          var visualSpec = await worksheet.getVisualSpecificationAsync();
+          var visualSpec = await ws.getVisualSpecificationAsync();
           var marksCard = visualSpec.marksSpecifications[visualSpec.activeMarksSpecificationIndex];
-
           for (var i = 0; i < marksCard.encodings.length; i++) {
             var enc = marksCard.encodings[i];
-            if (enc.id === 'stage' && enc.field) {
-              map.stage = enc.field.name;
-            } else if (enc.id === 'actual' && enc.field) {
-              map.actual = enc.field.name;
-            } else if (enc.id === 'goal' && enc.field) {
-              map.goal = enc.field.name;
-            }
+            if (enc.id === 'stage' && enc.field) map.stage = enc.field.name;
+            else if (enc.id === 'actual' && enc.field) map.actual = enc.field.name;
+            else if (enc.id === 'goal' && enc.field) map.goal = enc.field.name;
           }
         } catch (e) {
           console.error('[Funnel] Error reading encodings:', e);
         }
-
         return map;
       }
     })();

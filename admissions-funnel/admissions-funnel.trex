@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest manifest-version="0.1" xmlns="http://www.tableau.com/xml/extension_manifest">
-  <worksheet-extension id="com.principiabi.admissions-funnel" extension-version="1.0.0">
+  <worksheet-extension id="com.principiabi.admissions-funnel" extension-version="2.0.0">
     <default-locale>en_US</default-locale>
     <name resource-id="name"/>
     <description>Vertical stepped admissions funnel with traffic-light coloring for admissions pipeline</description>
     <author name="PrincipiaBI" email="kevin.capp@principia.edu" organization="Principia" website="https://github.com/PrincipiaBI"/>
-    <min-api-version>1.1</min-api-version>
+    <min-api-version>1.12</min-api-version>
     <source-location>
       <url>https://principiabi.github.io/tableau-viz-extensions/admissions-funnel/index.html</url>
     </source-location>
@@ -13,6 +13,9 @@
     <permissions>
       <permission>full data</permission>
     </permissions>
+    <context-menu>
+      <configure-context-menu-item/>
+    </context-menu>
     <encoding id="stage">
       <display-name>Stage</display-name>
       <data-spec>
