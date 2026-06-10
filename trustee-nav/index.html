@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Trustee Navigation</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #e8e8e8;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .nav-container {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      height: 100%;
+      padding: 4px 8px;
+      gap: 6px;
+      flex-wrap: nowrap;
+    }
+
+    .nav-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex: 1 1 0;
+      height: calc(100% - 8px);
+      max-height: 42px;
+      padding: 6px 16px;
+      background: #ffffff;
+      border: 1px solid #c0c0c0;
+      border-radius: 3px;
+      color: #2c3e5a;
+      font-size: 13px;
+      font-weight: 500;
+      text-align: center;
+      white-space: nowrap;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      text-decoration: none;
+      user-select: none;
+    }
+
+    .nav-btn:hover {
+      background: #f0f4f8;
+      border-color: #2c3e5a;
+    }
+
+    .nav-btn.active {
+      background: #2c3e5a;
+      color: #ffffff;
+      border-color: #2c3e5a;
+      font-weight: 600;
+      cursor: default;
+    }
+
+    .nav-btn.active:hover {
+      background: #2c3e5a;
+    }
+  </style>
+</head>
+<body>
+  <div class="nav-container" id="nav-container"></div>
+
+  <script src="../lib/tableau.extensions.1.latest.min.js"></script>
+  <script>
+    'use strict';
+    (function () {
+
+      // =====================================================================
+      // BUTTON DEFINITIONS — Edit this array to update all dashboards at once
+      // =====================================================================
+      var BUTTONS = [
+        { label: 'Overview',           path: 'OVERVIEW' },
+        { label: 'Enrollment',         path: 'Enrollment' },
+        { label: 'Student Success',    path: 'StudentSuccess' },
+        { label: 'Operational Health', path: 'Operations' },
+        { label: 'Open1',             path: 'Open1' }
+      ];
+
+      // Base path pattern to detect and construct URLs
+      var WORKBOOK_PATH = '/views/TrusteeDashboard/';
+      // =====================================================================
+
+      // Detect the current dashboard from the parent URL
+      function getCurrentPath() {
+        try {
+          var href = window.top.location.href;
+          var idx = href.indexOf(WORKBOOK_PATH);
+          if (idx !== -1) {
+            var after = href.substring(idx + WORKBOOK_PATH.length);
+            // Strip query params and hash fragments after the path
+            var end = after.search(/[?&#]/);
+            return end !== -1 ? after.substring(0, end) : after;
+          }
+        } catch (e) {
+          // Cross-origin — can't read parent URL
+        }
+        return null;
+      }
+
+      // Navigate to a dashboard
+      function navigateTo(path) {
+        try {
+          var href = window.top.location.href;
+          var idx = href.indexOf(WORKBOOK_PATH);
+          if (idx !== -1) {
+            var base = href.substring(0, idx + WORKBOOK_PATH.length);
+            // Preserve any query params from the original URL
+            var afterPath = href.substring(idx + WORKBOOK_PATH.length);
+            var qIdx = afterPath.search(/[?&#]/);
+            var queryPart = qIdx !== -1 ? afterPath.substring(qIdx) : '';
+            window.top.location.href = base + path + queryPart;
+          } else {
+            // Fallback: construct full URL
+            window.top.location.href = href.replace(/\/[^/]*$/, '/' + path);
+          }
+        } catch (e) {
+          console.error('[TrusteeNav] Navigation error:', e);
+        }
+      }
+
+      // Render buttons
+      function renderButtons() {
+        var container = document.getElementById('nav-container');
+        var currentPath = getCurrentPath();
+
+        BUTTONS.forEach(function (btn) {
+          var el = document.createElement('div');
+          el.className = 'nav-btn';
+          el.textContent = btn.label;
+
+          // Check if this is the active button
+          if (currentPath && currentPath.toLowerCase() === btn.path.toLowerCase()) {
+            el.classList.add('active');
+          }
+
+          el.addEventListener('click', function () {
+            if (el.classList.contains('active')) return;
+            navigateTo(btn.path);
+          });
+
+          container.appendChild(el);
+        });
+      }
+
+      // Responsive font sizing
+      function resizeButtons() {
+        var container = document.getElementById('nav-container');
+        var h = container.clientHeight;
+        var w = container.clientWidth;
+        var numButtons = BUTTONS.length;
+
+        var availWidth = (w - (numButtons - 1) * 6 - 16) / numButtons;
+        var fontSize = Math.max(Math.min(availWidth * 0.11, h * 0.35, 14), 9);
+
+        var buttons = container.querySelectorAll('.nav-btn');
+        buttons.forEach(function (btn) {
+          btn.style.fontSize = fontSize + 'px';
+        });
+      }
+
+      var resizeObserver = new ResizeObserver(resizeButtons);
+      resizeObserver.observe(document.getElementById('nav-container'));
+
+      // Initialize
+      tableau.extensions.initializeAsync().then(function () {
+        renderButtons();
+        resizeButtons();
+      }).catch(function (err) {
+        console.error('[TrusteeNav] Init failed:', err);
+        document.getElementById('nav-container').textContent = 'Init error';
+      });
+
+    })();
+  </script>
+</body>
+</html>
