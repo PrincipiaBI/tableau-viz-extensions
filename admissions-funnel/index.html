@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admissions Funnel</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #ffffff;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .funnel-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      height: 100%;
+      padding: 3% 5%;
+      gap: 0;
+    }
+
+    .funnel-stage {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      transition: all 0.3s ease;
+      cursor: default;
+      border-radius: 4px;
+      color: #ffffff;
+      text-align: center;
+      padding: 2% 3%;
+    }
+
+    .funnel-stage .stage-label {
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      opacity: 0.95;
+      white-space: nowrap;
+    }
+
+    .funnel-stage .stage-actual {
+      font-weight: 700;
+      line-height: 1.1;
+    }
+
+    .funnel-stage .stage-goal {
+      opacity: 0.85;
+      white-space: nowrap;
+    }
+
+    /* Traffic-light colors */
+    .funnel-stage.color-green { background: #2e8b57; }
+    .funnel-stage.color-amber { background: #d4820f; }
+    .funnel-stage.color-red { background: #c0392b; }
+    .funnel-stage.color-none { background: #7f8c8d; }
+
+    /* Tooltip */
+    .tooltip {
+      position: absolute;
+      left: 105%;
+      top: 50%;
+      transform: translateY(-50%);
+      background: #2c3e50;
+      color: #ecf0f1;
+      padding: 10px 14px;
+      border-radius: 6px;
+      font-size: 12px;
+      line-height: 1.5;
+      white-space: nowrap;
+      z-index: 1000;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+    }
+
+    .tooltip::before {
+      content: '';
+      position: absolute;
+      right: 100%;
+      top: 50%;
+      transform: translateY(-50%);
+      border: 6px solid transparent;
+      border-right-color: #2c3e50;
+    }
+
+    .funnel-stage:hover .tooltip {
+      opacity: 1;
+    }
+
+    .tooltip .tt-title {
+      font-weight: 700;
+      font-size: 13px;
+      margin-bottom: 4px;
+      border-bottom: 1px solid rgba(255,255,255,0.2);
+      padding-bottom: 4px;
+    }
+
+    .tooltip .tt-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .tooltip .tt-label { opacity: 0.7; }
+    .tooltip .tt-value { font-weight: 600; }
+
+    .tooltip .tt-positive { color: #2ecc71; }
+    .tooltip .tt-negative { color: #e74c3c; }
+
+    /* No data state */
+    .no-data {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      height: 100%;
+      color: #999;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div class="funnel-container" id="funnel-container">
+    <div class="no-data" id="no-data">Configure extension to display funnel</div>
+  </div>
+
+  <script src="../lib/tableau.extensions.1.latest.min.js"></script>
+  <script>
+    (function () {
+      'use strict';
+
+      let currentWorksheet = null;
+      let unregisterFilterListener = null;
+      let unregisterMarkListener = null;
+
+      const DEFAULT_STAGES = [
+        { id: '1', label: 'Inquiries', actualCol: '', goalCol: '', priorYearCol: '', definition: 'Students who have expressed interest' },
+        { id: '2', label: 'Applications', actualCol: '', goalCol: '', priorYearCol: '', definition: 'Students who submitted an application' },
+        { id: '3', label: 'Admits', actualCol: '', goalCol: '', priorYearCol: '', definition: 'Students offered admission' },
+        { id: '4', label: 'Commits', actualCol: '', goalCol: '', priorYearCol: '', definition: 'Students who confirmed enrollment' }
+      ];
+
+      let config = {
+        stages: DEFAULT_STAGES,
+        thresholds: { red: 90, green: 100 },
+        colors: { green: '#2e8b57', amber: '#d4820f', red: '#c0392b' },
+        abbreviateNumbers: true,
+        showTooltips: true,
+        showGoals: true
+      };
+
+      // --- Number formatting ---
+      function formatNumber(val) {
+        if (val === null || val === undefined || isNaN(val)) return '—';
+        const num = Number(val);
+        if (!config.abbreviateNumbers || num < 10000) {
+          return num.toLocaleString();
+        }
+        if (num >= 1000000) return (num / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+        return (num / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
+      }
+
+      // --- Color logic ---
+      function getColorClass(actual, goal) {
+        if (goal === null || goal === 0 || actual === null) return 'color-none';
+        const pct = (actual / goal) * 100;
+        if (pct >= config.thresholds.green) return 'color-green';
+        if (pct >= config.thresholds.red) return 'color-amber';
+        return 'color-red';
+      }
+
+      // --- Responsive sizing ---
+      function resizeFunnel() {
+        const container = document.getElementById('funnel-container');
+        const stages = container.querySelectorAll('.funnel-stage');
+        if (stages.length === 0) return;
+
+        const w = container.clientWidth;
+        const h = container.clientHeight;
+        const numStages = stages.length;
+
+        const gapPx = Math.max(2, h * 0.01);
+        const availableHeight = h - (gapPx * (numStages - 1));
+        const stageHeight = Math.floor(availableHeight / numStages);
+
+        const maxWidth = w * 0.92;
+        const minWidth = w * 0.30;
+        const widthStep = (maxWidth - minWidth) / Math.max(numStages - 1, 1);
+
+        const baseFontSize = Math.min(w, h);
+        const labelSize = Math.max(Math.min(baseFontSize * 0.028, 13), 9);
+        const actualSize = Math.max(Math.min(baseFontSize * 0.06, 32), 16);
+        const goalSize = Math.max(Math.min(baseFontSize * 0.022, 12), 8);
+
+        const hideGoals = stageHeight < 50;
+
+        stages.forEach((stage, i) => {
+          const stageWidth = maxWidth - (widthStep * i);
+          stage.style.width = stageWidth + 'px';
+          stage.style.height = stageHeight + 'px';
+          stage.style.marginBottom = (i < numStages - 1) ? gapPx + 'px' : '0';
+
+          const labelEl = stage.querySelector('.stage-label');
+          const actualEl = stage.querySelector('.stage-actual');
+          const goalEl = stage.querySelector('.stage-goal');
+
+          if (labelEl) labelEl.style.fontSize = labelSize + 'px';
+          if (actualEl) actualEl.style.fontSize = actualSize + 'px';
+          if (goalEl) {
+            goalEl.style.fontSize = goalSize + 'px';
+            goalEl.style.display = (hideGoals || !config.showGoals) ? 'none' : 'block';
+          }
+        });
+
+        // Position tooltips - flip to left if not enough room on right
+        stages.forEach(stage => {
+          const tooltip = stage.querySelector('.tooltip');
+          if (!tooltip) return;
+          const rect = stage.getBoundingClientRect();
+          const tooltipWidth = 220;
+          if (rect.right + tooltipWidth > window.innerWidth) {
+            tooltip.style.left = 'auto';
+            tooltip.style.right = '105%';
+            tooltip.querySelector('.tt-arrow')?.remove();
+          }
+        });
+      }
+
+      const observer = new ResizeObserver(resizeFunnel);
+      observer.observe(document.getElementById('funnel-container'));
+
+      // --- Render funnel ---
+      function renderFunnel(stageData) {
+        const container = document.getElementById('funnel-container');
+        const noData = document.getElementById('no-data');
+
+        if (!stageData || stageData.length === 0) {
+          noData.style.display = 'flex';
+          container.querySelectorAll('.funnel-stage').forEach(el => el.remove());
+          return;
+        }
+
+        noData.style.display = 'none';
+
+        // Remove existing stages
+        container.querySelectorAll('.funnel-stage').forEach(el => el.remove());
+
+        stageData.forEach(stage => {
+          const colorClass = getColorClass(stage.actual, stage.goal);
+          const el = document.createElement('div');
+          el.className = 'funnel-stage ' + colorClass;
+
+          // Apply custom colors
+          if (colorClass === 'color-green') el.style.background = config.colors.green;
+          else if (colorClass === 'color-amber') el.style.background = config.colors.amber;
+          else if (colorClass === 'color-red') el.style.background = config.colors.red;
+
+          let html = '';
+          html += '<div class="stage-label">' + escapeHtml(stage.label) + '</div>';
+          html += '<div class="stage-actual">' + formatNumber(stage.actual) + '</div>';
+          if (config.showGoals && stage.goal !== null) {
+            html += '<div class="stage-goal">Goal: ' + formatNumber(stage.goal) + '</div>';
+          }
+
+          // Tooltip
+          if (config.showTooltips) {
+            html += buildTooltip(stage);
+          }
+
+          el.innerHTML = html;
+          container.appendChild(el);
+        });
+
+        resizeFunnel();
+      }
+
+      function buildTooltip(stage) {
+        const pct = (stage.goal && stage.goal > 0) ? ((stage.actual / stage.goal) * 100).toFixed(1) : null;
+        const variance = (stage.goal !== null && stage.actual !== null) ? stage.actual - stage.goal : null;
+        const pyDiff = (stage.priorYear !== null && stage.actual !== null) ? stage.actual - stage.priorYear : null;
+
+        let html = '<div class="tooltip">';
+        html += '<div class="tt-title">' + escapeHtml(stage.label) + '</div>';
+
+        if (stage.definition) {
+          html += '<div class="tt-row"><span class="tt-label" style="opacity:0.8;font-style:italic;">' + escapeHtml(stage.definition) + '</span></div>';
+        }
+
+        html += '<div class="tt-row"><span class="tt-label">Current</span><span class="tt-value">' + formatNumber(stage.actual) + '</span></div>';
+
+        if (stage.goal !== null) {
+          html += '<div class="tt-row"><span class="tt-label">Goal</span><span class="tt-value">' + formatNumber(stage.goal) + '</span></div>';
+        }
+
+        if (pct !== null) {
+          html += '<div class="tt-row"><span class="tt-label">% to Goal</span><span class="tt-value">' + pct + '%</span></div>';
+        }
+
+        if (variance !== null) {
+          const varClass = variance >= 0 ? 'tt-positive' : 'tt-negative';
+          const varSign = variance >= 0 ? '+' : '';
+          html += '<div class="tt-row"><span class="tt-label">Variance</span><span class="tt-value ' + varClass + '">' + varSign + formatNumber(variance) + '</span></div>';
+        }
+
+        if (stage.priorYear !== null) {
+          const pyClass = pyDiff >= 0 ? 'tt-positive' : 'tt-negative';
+          const pySign = pyDiff >= 0 ? '+' : '';
+          html += '<div class="tt-row"><span class="tt-label">Prior Year Final</span><span class="tt-value">' + formatNumber(stage.priorYear) + ' <span class="' + pyClass + '">(' + pySign + formatNumber(pyDiff) + ')</span></span></div>';
+        }
+
+        html += '</div>';
+        return html;
+      }
+
+      function escapeHtml(str) {
+        if (!str) return '';
+        return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+      }
+
+      // --- Load config from settings ---
+      function loadConfig() {
+        const settings = tableau.extensions.settings;
+
+        const stagesJson = settings.get('stages');
+        if (stagesJson) {
+          try { config.stages = JSON.parse(stagesJson); } catch (e) { /* keep defaults */ }
+        }
+
+        const thresholdRed = settings.get('thresholdRed');
+        const thresholdGreen = settings.get('thresholdGreen');
+        if (thresholdRed) config.thresholds.red = parseFloat(thresholdRed);
+        if (thresholdGreen) config.thresholds.green = parseFloat(thresholdGreen);
+
+        const colorGreen = settings.get('colorGreen');
+        const colorAmber = settings.get('colorAmber');
+        const colorRed = settings.get('colorRed');
+        if (colorGreen) config.colors.green = colorGreen;
+        if (colorAmber) config.colors.amber = colorAmber;
+        if (colorRed) config.colors.red = colorRed;
+
+        config.abbreviateNumbers = settings.get('abbreviateNumbers') !== 'false';
+        config.showTooltips = settings.get('showTooltips') !== 'false';
+        config.showGoals = settings.get('showGoals') !== 'false';
+      }
+
+      // --- Fetch data from Tableau ---
+      function refreshData() {
+        if (!currentWorksheet) return;
+
+        currentWorksheet.getSummaryDataAsync().then(dataTable => {
+          const columns = dataTable.columns;
+          const rows = dataTable.data;
+
+          if (rows.length === 0) {
+            renderFunnel([]);
+            return;
+          }
+
+          // Build column index lookup (case-insensitive, normalized)
+          const colMap = {};
+          columns.forEach((col, idx) => {
+            const key = col.fieldName.toUpperCase().replace(/\s+/g, '_');
+            colMap[key] = idx;
+          });
+
+          // Find value by column name (case-insensitive fuzzy match)
+          function findValue(colName) {
+            if (!colName) return null;
+            const target = colName.toUpperCase().replace(/\s+/g, '_');
+
+            // Exact match first
+            if (colMap[target] !== undefined) {
+              const val = rows[0][colMap[target]].value;
+              return parseFloat(val) || 0;
+            }
+
+            // Partial match
+            for (const key of Object.keys(colMap)) {
+              if (key.indexOf(target) !== -1 || target.indexOf(key) !== -1) {
+                const val = rows[0][colMap[key]].value;
+                return parseFloat(val) || 0;
+              }
+            }
+            return null;
+          }
+
+          // Map each configured stage to its data
+          const stageData = config.stages.map(stage => ({
+            label: stage.label,
+            actual: findValue(stage.actualCol),
+            goal: findValue(stage.goalCol),
+            priorYear: findValue(stage.priorYearCol),
+            definition: stage.definition || ''
+          }));
+
+          renderFunnel(stageData);
+        }).catch(err => {
+          console.error('[Funnel] Data error:', err);
+          renderFunnel([]);
+        });
+      }
+
+      // --- Tableau Extension Init ---
+      tableau.extensions.initializeAsync({ configure: showConfig }).then(() => {
+        loadConfig();
+        const savedSheet = tableau.extensions.settings.get('worksheet');
+        if (savedSheet) {
+          loadWorksheet(savedSheet);
+        } else {
+          showConfig();
+        }
+      }).catch(err => {
+        console.error('[Funnel] Init failed:', err);
+        document.getElementById('no-data').textContent = 'Extension init error';
+      });
+
+      function showConfig() {
+        const popupUrl = window.location.href.replace('index.html', 'config.html');
+        tableau.extensions.ui.displayDialogAsync(popupUrl, '', { height: 620, width: 520 })
+          .then(() => {
+            loadConfig();
+            const savedSheet = tableau.extensions.settings.get('worksheet');
+            if (savedSheet) loadWorksheet(savedSheet);
+          })
+          .catch(error => {
+            if (error.errorCode === tableau.ErrorCodes.DialogClosedByUser) {
+              loadConfig();
+              const savedSheet = tableau.extensions.settings.get('worksheet');
+              if (savedSheet) loadWorksheet(savedSheet);
+            }
+          });
+      }
+
+      function loadWorksheet(sheetName) {
+        const dashboard = tableau.extensions.dashboardContent.dashboard;
+        const worksheet = dashboard.worksheets.find(ws => ws.name === sheetName);
+
+        if (!worksheet) {
+          document.getElementById('no-data').textContent = 'Worksheet "' + sheetName + '" not found';
+          document.getElementById('no-data').style.display = 'flex';
+          return;
+        }
+
+        if (unregisterFilterListener) unregisterFilterListener();
+        if (unregisterMarkListener) unregisterMarkListener();
+
+        currentWorksheet = worksheet;
+
+        unregisterFilterListener = worksheet.addEventListener(
+          tableau.TableauEventType.FilterChanged, () => refreshData()
+        );
+        unregisterMarkListener = worksheet.addEventListener(
+          tableau.TableauEventType.MarkSelectionChanged, () => refreshData()
+        );
+
+        refreshData();
+      }
+    })();
+  </script>
+</body>
+</html>

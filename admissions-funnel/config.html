@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admissions Funnel Configuration</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      padding: 20px;
+      background: #f8f9fa;
+      color: #333;
+      font-size: 13px;
+    }
+
+    h2 {
+      font-size: 16px;
+      margin-bottom: 6px;
+      color: #1a1a1a;
+    }
+
+    .subtitle {
+      font-size: 12px;
+      color: #888;
+      margin-bottom: 16px;
+    }
+
+    h3 {
+      font-size: 13px;
+      font-weight: 600;
+      color: #444;
+      margin-bottom: 8px;
+      margin-top: 16px;
+      padding-bottom: 4px;
+      border-bottom: 1px solid #e0e0e0;
+    }
+
+    label {
+      display: block;
+      font-size: 12px;
+      font-weight: 500;
+      margin-bottom: 3px;
+      color: #555;
+    }
+
+    select, input[type="text"], input[type="number"], input[type="color"] {
+      width: 100%;
+      padding: 6px 10px;
+      font-size: 12px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      background: #fff;
+      margin-bottom: 10px;
+    }
+
+    input[type="color"] {
+      height: 32px;
+      padding: 2px;
+      cursor: pointer;
+    }
+
+    select:focus, input:focus {
+      outline: none;
+      border-color: #4a90d9;
+      box-shadow: 0 0 0 2px rgba(74, 144, 217, 0.2);
+    }
+
+    .section {
+      margin-bottom: 12px;
+    }
+
+    /* Stage cards */
+    .stage-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    .stage-card {
+      background: #fff;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      padding: 10px 12px;
+      position: relative;
+    }
+
+    .stage-card-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .stage-card-header .stage-number {
+      background: #4a90d9;
+      color: #fff;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    .stage-card-header input {
+      flex: 1;
+      margin-bottom: 0;
+      font-weight: 600;
+    }
+
+    .stage-card-header .btn-remove {
+      background: none;
+      border: none;
+      color: #c0392b;
+      cursor: pointer;
+      font-size: 16px;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+
+    .stage-card-header .btn-remove:hover {
+      background: #fdecea;
+    }
+
+    .stage-fields {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px 10px;
+    }
+
+    .stage-fields label {
+      font-size: 11px;
+      margin-bottom: 2px;
+    }
+
+    .stage-fields input, .stage-fields select {
+      margin-bottom: 4px;
+      font-size: 11px;
+      padding: 4px 8px;
+    }
+
+    .stage-definition {
+      grid-column: 1 / -1;
+    }
+
+    .btn-add-stage {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 6px 12px;
+      font-size: 12px;
+      border: 1px dashed #4a90d9;
+      border-radius: 4px;
+      background: #f0f7ff;
+      color: #4a90d9;
+      cursor: pointer;
+    }
+
+    .btn-add-stage:hover {
+      background: #e0efff;
+    }
+
+    /* Move buttons */
+    .stage-card-header .btn-move {
+      background: none;
+      border: 1px solid #ddd;
+      border-radius: 3px;
+      cursor: pointer;
+      font-size: 11px;
+      padding: 1px 5px;
+      color: #666;
+    }
+
+    .stage-card-header .btn-move:hover {
+      background: #f0f0f0;
+    }
+
+    /* Threshold / color row */
+    .threshold-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+
+    .threshold-row label {
+      width: 80px;
+      margin-bottom: 0;
+      font-size: 12px;
+    }
+
+    .threshold-row input[type="number"] {
+      width: 70px;
+      margin-bottom: 0;
+    }
+
+    .threshold-row input[type="color"] {
+      width: 40px;
+      height: 28px;
+      margin-bottom: 0;
+    }
+
+    .threshold-row span {
+      font-size: 11px;
+      color: #888;
+    }
+
+    /* Toggles */
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+
+    .toggle-row label {
+      margin-bottom: 0;
+      flex: 1;
+    }
+
+    .toggle-row input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+    }
+
+    /* Buttons */
+    .button-row {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-top: 20px;
+      padding-top: 12px;
+      border-top: 1px solid #e0e0e0;
+    }
+
+    button.btn {
+      padding: 8px 20px;
+      font-size: 13px;
+      border-radius: 4px;
+      cursor: pointer;
+      border: 1px solid #ccc;
+      background: #fff;
+      color: #333;
+    }
+
+    button.btn:hover { background: #f0f0f0; }
+
+    button.btn.primary {
+      background: #4a90d9;
+      color: #fff;
+      border-color: #4a90d9;
+    }
+
+    button.btn.primary:hover { background: #3a7bc8; }
+
+    .columns-hint {
+      font-size: 10px;
+      color: #999;
+      margin-top: -6px;
+      margin-bottom: 8px;
+    }
+  </style>
+</head>
+<body>
+  <h2>Admissions Funnel Configuration</h2>
+  <p class="subtitle">Map worksheet columns to funnel stages and configure display settings.</p>
+
+  <!-- Worksheet selection -->
+  <div class="section">
+    <label for="worksheet-select">Worksheet</label>
+    <select id="worksheet-select">
+      <option value="">-- Select a worksheet --</option>
+    </select>
+    <p class="columns-hint" id="columns-hint" style="display:none">Available columns will appear below after selecting a worksheet.</p>
+  </div>
+
+  <!-- Available columns display -->
+  <div class="section" id="available-columns-section" style="display:none">
+    <label>Available Columns</label>
+    <div id="available-columns" style="font-size:11px;color:#666;background:#fff;border:1px solid #ddd;border-radius:4px;padding:6px 10px;margin-bottom:10px;max-height:60px;overflow-y:auto;"></div>
+  </div>
+
+  <!-- Stages -->
+  <h3>Funnel Stages</h3>
+  <div class="stage-list" id="stage-list"></div>
+  <button class="btn-add-stage" id="btn-add-stage" type="button">+ Add Stage</button>
+
+  <!-- Color Thresholds -->
+  <h3>Color Thresholds</h3>
+  <div class="section">
+    <div class="threshold-row">
+      <label>Red (below)</label>
+      <input type="number" id="threshold-red" value="90" min="0" max="100">
+      <span>%</span>
+      <input type="color" id="color-red" value="#c0392b">
+    </div>
+    <div class="threshold-row">
+      <label>Amber (below)</label>
+      <input type="number" id="threshold-green" value="100" min="0" max="200">
+      <span>%</span>
+      <input type="color" id="color-amber" value="#d4820f">
+    </div>
+    <div class="threshold-row">
+      <label>Green (at/above)</label>
+      <span style="width:70px;text-align:center;">—</span>
+      <span></span>
+      <input type="color" id="color-green" value="#2e8b57">
+    </div>
+    <p class="columns-hint">Red = below first threshold, Amber = between, Green = at or above second threshold.</p>
+  </div>
+
+  <!-- Display Options -->
+  <h3>Display Options</h3>
+  <div class="section">
+    <div class="toggle-row">
+      <label>Abbreviate large numbers (10K+)</label>
+      <input type="checkbox" id="opt-abbreviate" checked>
+    </div>
+    <div class="toggle-row">
+      <label>Show tooltips on hover</label>
+      <input type="checkbox" id="opt-tooltips" checked>
+    </div>
+    <div class="toggle-row">
+      <label>Show goal values in funnel</label>
+      <input type="checkbox" id="opt-goals" checked>
+    </div>
+  </div>
+
+  <div class="button-row">
+    <button class="btn" id="btn-cancel" type="button">Cancel</button>
+    <button class="btn primary" id="btn-save" type="button">Save</button>
+  </div>
+
+  <script src="../lib/tableau.extensions.1.latest.min.js"></script>
+  <script>
+    (function () {
+      'use strict';
+
+      const DEFAULT_STAGES = [
+        { id: '1', label: 'Inquiries', actualCol: '', goalCol: '', priorYearCol: '', definition: 'Students who have expressed interest' },
+        { id: '2', label: 'Applications', actualCol: '', goalCol: '', priorYearCol: '', definition: 'Students who submitted an application' },
+        { id: '3', label: 'Admits', actualCol: '', goalCol: '', priorYearCol: '', definition: 'Students offered admission' },
+        { id: '4', label: 'Commits', actualCol: '', goalCol: '', priorYearCol: '', definition: 'Students who confirmed enrollment' }
+      ];
+
+      let stages = [];
+      let availableColumns = [];
+      let nextId = 100;
+
+      // --- Render stage cards ---
+      function renderStages() {
+        const list = document.getElementById('stage-list');
+        list.innerHTML = '';
+
+        stages.forEach((stage, index) => {
+          const card = document.createElement('div');
+          card.className = 'stage-card';
+          card.dataset.index = index;
+
+          card.innerHTML = `
+            <div class="stage-card-header">
+              <span class="stage-number">${index + 1}</span>
+              <input type="text" class="stage-label-input" value="${escapeAttr(stage.label)}" placeholder="Stage name">
+              <button class="btn-move" data-dir="up" title="Move up" ${index === 0 ? 'disabled' : ''}>&uarr;</button>
+              <button class="btn-move" data-dir="down" title="Move down" ${index === stages.length - 1 ? 'disabled' : ''}>&darr;</button>
+              <button class="btn-remove" title="Remove stage">&times;</button>
+            </div>
+            <div class="stage-fields">
+              <div>
+                <label>Actual Column</label>
+                <input type="text" class="stage-actual" value="${escapeAttr(stage.actualCol)}" placeholder="e.g. Inquiry_Count">
+              </div>
+              <div>
+                <label>Goal Column</label>
+                <input type="text" class="stage-goal" value="${escapeAttr(stage.goalCol)}" placeholder="e.g. Inquiry_Goal">
+              </div>
+              <div>
+                <label>Prior Year Column</label>
+                <input type="text" class="stage-prioryear" value="${escapeAttr(stage.priorYearCol)}" placeholder="e.g. Inquiry_PY">
+              </div>
+              <div class="stage-definition">
+                <label>Definition (tooltip)</label>
+                <input type="text" class="stage-def" value="${escapeAttr(stage.definition)}" placeholder="Brief description for tooltip">
+              </div>
+            </div>
+          `;
+
+          // Event: label change
+          card.querySelector('.stage-label-input').addEventListener('input', e => {
+            stages[index].label = e.target.value;
+          });
+
+          // Event: field changes
+          card.querySelector('.stage-actual').addEventListener('input', e => { stages[index].actualCol = e.target.value; });
+          card.querySelector('.stage-goal').addEventListener('input', e => { stages[index].goalCol = e.target.value; });
+          card.querySelector('.stage-prioryear').addEventListener('input', e => { stages[index].priorYearCol = e.target.value; });
+          card.querySelector('.stage-def').addEventListener('input', e => { stages[index].definition = e.target.value; });
+
+          // Event: move
+          card.querySelectorAll('.btn-move').forEach(btn => {
+            btn.addEventListener('click', () => {
+              const dir = btn.dataset.dir;
+              const target = dir === 'up' ? index - 1 : index + 1;
+              if (target < 0 || target >= stages.length) return;
+              [stages[index], stages[target]] = [stages[target], stages[index]];
+              renderStages();
+            });
+          });
+
+          // Event: remove
+          card.querySelector('.btn-remove').addEventListener('click', () => {
+            if (stages.length <= 1) { alert('Must have at least one stage.'); return; }
+            stages.splice(index, 1);
+            renderStages();
+          });
+
+          list.appendChild(card);
+        });
+      }
+
+      // --- Fetch available columns from selected worksheet ---
+      function fetchColumns(sheetName) {
+        if (!sheetName) {
+          document.getElementById('available-columns-section').style.display = 'none';
+          return;
+        }
+
+        const dashboard = tableau.extensions.dashboardContent.dashboard;
+        const worksheet = dashboard.worksheets.find(ws => ws.name === sheetName);
+        if (!worksheet) return;
+
+        worksheet.getSummaryDataAsync().then(dataTable => {
+          availableColumns = dataTable.columns.map(c => c.fieldName);
+          const colDiv = document.getElementById('available-columns');
+          colDiv.textContent = availableColumns.join(', ');
+          document.getElementById('available-columns-section').style.display = 'block';
+        }).catch(() => {
+          document.getElementById('available-columns-section').style.display = 'none';
+        });
+      }
+
+      function escapeAttr(str) {
+        if (!str) return '';
+        return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      }
+
+      // --- Initialize dialog ---
+      tableau.extensions.initializeDialogAsync().then(() => {
+        const dashboard = tableau.extensions.dashboardContent.dashboard;
+        const worksheets = dashboard.worksheets;
+        const select = document.getElementById('worksheet-select');
+        const settings = tableau.extensions.settings;
+
+        // Populate worksheet dropdown
+        const savedSheet = settings.get('worksheet');
+        worksheets.forEach(ws => {
+          const option = document.createElement('option');
+          option.value = ws.name;
+          option.textContent = ws.name;
+          if (ws.name === savedSheet) option.selected = true;
+          select.appendChild(option);
+        });
+
+        // Load saved stages
+        const stagesJson = settings.get('stages');
+        if (stagesJson) {
+          try { stages = JSON.parse(stagesJson); } catch (e) { stages = JSON.parse(JSON.stringify(DEFAULT_STAGES)); }
+        } else {
+          stages = JSON.parse(JSON.stringify(DEFAULT_STAGES));
+        }
+
+        // Load thresholds
+        const tRed = settings.get('thresholdRed');
+        const tGreen = settings.get('thresholdGreen');
+        if (tRed) document.getElementById('threshold-red').value = tRed;
+        if (tGreen) document.getElementById('threshold-green').value = tGreen;
+
+        // Load colors
+        const cGreen = settings.get('colorGreen');
+        const cAmber = settings.get('colorAmber');
+        const cRed = settings.get('colorRed');
+        if (cGreen) document.getElementById('color-green').value = cGreen;
+        if (cAmber) document.getElementById('color-amber').value = cAmber;
+        if (cRed) document.getElementById('color-red').value = cRed;
+
+        // Load display options
+        if (settings.get('abbreviateNumbers') === 'false') document.getElementById('opt-abbreviate').checked = false;
+        if (settings.get('showTooltips') === 'false') document.getElementById('opt-tooltips').checked = false;
+        if (settings.get('showGoals') === 'false') document.getElementById('opt-goals').checked = false;
+
+        // Render stages
+        renderStages();
+
+        // Fetch columns for saved worksheet
+        if (savedSheet) fetchColumns(savedSheet);
+
+        // Worksheet change - fetch columns
+        select.addEventListener('change', () => fetchColumns(select.value));
+
+        // Add stage button
+        document.getElementById('btn-add-stage').addEventListener('click', () => {
+          nextId++;
+          stages.push({ id: String(nextId), label: '', actualCol: '', goalCol: '', priorYearCol: '', definition: '' });
+          renderStages();
+        });
+
+        // Save
+        document.getElementById('btn-save').addEventListener('click', () => {
+          const selectedSheet = select.value;
+          if (!selectedSheet) { alert('Please select a worksheet.'); return; }
+
+          // Validate at least one stage has an actual column
+          const hasActual = stages.some(s => s.actualCol.trim() !== '');
+          if (!hasActual) { alert('At least one stage must have an Actual Column mapped.'); return; }
+
+          settings.set('worksheet', selectedSheet);
+          settings.set('stages', JSON.stringify(stages));
+          settings.set('thresholdRed', document.getElementById('threshold-red').value);
+          settings.set('thresholdGreen', document.getElementById('threshold-green').value);
+          settings.set('colorGreen', document.getElementById('color-green').value);
+          settings.set('colorAmber', document.getElementById('color-amber').value);
+          settings.set('colorRed', document.getElementById('color-red').value);
+          settings.set('abbreviateNumbers', document.getElementById('opt-abbreviate').checked ? 'true' : 'false');
+          settings.set('showTooltips', document.getElementById('opt-tooltips').checked ? 'true' : 'false');
+          settings.set('showGoals', document.getElementById('opt-goals').checked ? 'true' : 'false');
+
+          settings.saveAsync().then(() => {
+            tableau.extensions.ui.closeDialog('saved');
+          });
+        });
+
+        // Cancel
+        document.getElementById('btn-cancel').addEventListener('click', () => {
+          tableau.extensions.ui.closeDialog('');
+        });
+      });
+    })();
+  </script>
+</body>
+</html>
