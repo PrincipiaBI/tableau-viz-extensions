@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KPI Table</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #ffffff;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    .table-container {
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+      height: 100%;
+    }
+
+    /* Toolbar */
+    .toolbar {
+      display: flex;
+      align-items: center;
+      padding: 6px 10px;
+      border-bottom: 1px solid #e0e0e0;
+      background: #fafafa;
+      flex-shrink: 0;
+      gap: 8px;
+    }
+
+    .toolbar.hidden { display: none; }
+
+    .search-input {
+      flex: 1;
+      max-width: 280px;
+      padding: 5px 10px;
+      border: 1px solid #d0d0d0;
+      border-radius: 4px;
+      font-size: 12px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .search-input:focus {
+      border-color: #4a90d9;
+    }
+
+    .search-input::placeholder {
+      color: #aaa;
+    }
+
+    .row-count {
+      font-size: 11px;
+      color: #888;
+      margin-left: auto;
+    }
+
+    /* Table wrapper */
+    .table-wrapper {
+      flex: 1;
+      overflow: auto;
+      position: relative;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: auto;
+    }
+
+    /* Header */
+    thead {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    th {
+      background: #f5f5f5;
+      border-bottom: 2px solid #ddd;
+      padding: 7px 10px;
+      text-align: left;
+      font-size: 11px;
+      font-weight: 600;
+      color: #444;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+      white-space: nowrap;
+      cursor: pointer;
+      user-select: none;
+      position: relative;
+    }
+
+    th:hover {
+      background: #eaeaea;
+    }
+
+    th .sort-arrow {
+      margin-left: 4px;
+      font-size: 9px;
+      opacity: 0.4;
+    }
+
+    th.sort-asc .sort-arrow,
+    th.sort-desc .sort-arrow {
+      opacity: 1;
+      color: #4a90d9;
+    }
+
+    /* Body rows */
+    td {
+      padding: 6px 10px;
+      font-size: 12px;
+      color: #333;
+      border-bottom: 1px solid #f0f0f0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 300px;
+    }
+
+    tr.banded {
+      background: #f9fafb;
+    }
+
+    tr:hover {
+      background: #eef4fb !important;
+    }
+
+    /* Status dot */
+    .status-dot {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      vertical-align: middle;
+    }
+
+    .status-dot.green { background: #2e8b57; }
+    .status-dot.yellow { background: #d4a017; }
+    .status-dot.red { background: #c0392b; }
+    .status-dot.gray { background: #ccc; }
+
+    /* Progress bar */
+    .progress-cell {
+      min-width: 100px;
+      max-width: 160px;
+    }
+
+    .progress-bar-container {
+      position: relative;
+      width: 100%;
+      height: 18px;
+      background: #eee;
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      border-radius: 3px;
+      transition: width 0.3s ease;
+    }
+
+    .progress-bar-fill.green { background: #2e8b57; }
+    .progress-bar-fill.amber { background: #d4a017; }
+    .progress-bar-fill.red { background: #c0392b; }
+
+    .progress-bar-label {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      font-weight: 600;
+      color: #333;
+    }
+
+    /* Prompt state */
+    .prompt {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      height: 100%;
+      color: #999;
+      font-size: 14px;
+      text-align: center;
+      padding: 20px;
+      line-height: 1.6;
+    }
+
+    .prompt .prompt-icon {
+      font-size: 36px;
+      margin-bottom: 12px;
+      opacity: 0.5;
+    }
+
+    .prompt .prompt-detail {
+      font-size: 12px;
+      color: #bbb;
+      margin-top: 6px;
+    }
+
+    /* Font size variants */
+    .font-small td { font-size: 11px; padding: 4px 8px; }
+    .font-small th { font-size: 10px; padding: 5px 8px; }
+    .font-large td { font-size: 14px; padding: 8px 12px; }
+    .font-large th { font-size: 12px; padding: 9px 12px; }
+  </style>
+</head>
+<body>
+  <div class="table-container" id="table-container">
+    <div class="toolbar" id="toolbar">
+      <input type="text" class="search-input" id="search-input" placeholder="Search...">
+      <span class="row-count" id="row-count"></span>
+    </div>
+    <div class="table-wrapper" id="table-wrapper">
+      <div class="prompt" id="prompt">
+        <div class="prompt-icon">&#9638;</div>
+        <div>Drag fields onto Detail to build the table</div>
+        <div class="prompt-detail">All fields on Detail become columns &bull; Right-click for settings</div>
+      </div>
+      <table id="data-table" style="display:none;">
+        <thead id="table-head"></thead>
+        <tbody id="table-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script src="../lib/tableau.extensions.1.latest.min.js"></script>
+  <script>
+    'use strict';
+    (function () {
+
+      // --- Configuration defaults ---
+      var config = {
+        statusColumn: '',
+        progressColumn: '',
+        statusGreen: 1,
+        statusYellow: 2,
+        statusRed: 3,
+        progressGreenThreshold: 1.0,
+        progressAmberThreshold: 0.9,
+        showSearch: true,
+        bandingColor: '#f9fafb',
+        fontSize: 'medium'
+      };
+
+      var worksheet = null;
+      var currentData = [];    // array of row objects
+      var currentColumns = []; // array of column info objects
+      var sortCol = -1;
+      var sortDir = 0; // 0=unsorted, 1=asc, 2=desc
+      var tupleIds = [];       // parallel to currentData, stores 1-based tuple IDs
+
+      // --- Initialize ---
+      window.onload = tableau.extensions.initializeAsync({ configure: showConfig }).then(function () {
+        worksheet = tableau.extensions.worksheetContent.worksheet;
+        loadConfig();
+        applyFontSize();
+
+        worksheet.addEventListener(tableau.TableauEventType.SummaryDataChanged, updateDataAndRender);
+        tableau.extensions.settings.addEventListener(
+          tableau.TableauEventType.SettingsChanged,
+          function () { loadConfig(); applyFontSize(); renderTable(); }
+        );
+
+        updateDataAndRender();
+      }, function (err) {
+        console.error('[KPI Table] Init failed:', err);
+        document.getElementById('prompt').innerHTML = '<div>Extension init error</div>';
+      });
+
+      // --- Config dialog ---
+      function showConfig() {
+        var popupUrl = window.location.href.replace('index.html', 'config.html');
+        tableau.extensions.ui.displayDialogAsync(popupUrl, '', { height: 480, width: 420 })
+          .then(function () { loadConfig(); applyFontSize(); renderTable(); })
+          .catch(function (error) {
+            if (error.errorCode !== tableau.ErrorCodes.DialogClosedByUser) {
+              console.error('[KPI Table] Config error:', error);
+            }
+          });
+      }
+
+      // --- Load config from settings ---
+      function loadConfig() {
+        var s = tableau.extensions.settings;
+        config.statusColumn = s.get('statusColumn') || '';
+        config.progressColumn = s.get('progressColumn') || '';
+        config.statusGreen = parseInt(s.get('statusGreen')) || 1;
+        config.statusYellow = parseInt(s.get('statusYellow')) || 2;
+        config.statusRed = parseInt(s.get('statusRed')) || 3;
+        config.progressGreenThreshold = parseFloat(s.get('progressGreenThreshold')) || 1.0;
+        config.progressAmberThreshold = parseFloat(s.get('progressAmberThreshold')) || 0.9;
+        config.showSearch = s.get('showSearch') !== 'false';
+        config.bandingColor = s.get('bandingColor') || '#f9fafb';
+        config.fontSize = s.get('fontSize') || 'medium';
+      }
+
+      function applyFontSize() {
+        var table = document.getElementById('data-table');
+        table.classList.remove('font-small', 'font-large');
+        if (config.fontSize === 'small') table.classList.add('font-small');
+        else if (config.fontSize === 'large') table.classList.add('font-large');
+
+        var toolbar = document.getElementById('toolbar');
+        toolbar.classList.toggle('hidden', !config.showSearch);
+      }
+
+      // --- Fetch data and render ---
+      async function updateDataAndRender() {
+        if (!worksheet) return;
+
+        var dataTableReader = await worksheet.getSummaryDataReaderAsync();
+        var dataTable = await dataTableReader.getAllPagesAsync();
+        await dataTableReader.releaseAsync();
+
+        currentColumns = dataTable.columns.map(function (col) {
+          return {
+            fieldName: col.fieldName,
+            dataType: col.dataType,
+            index: col.index
+          };
+        });
+
+        // Persist column names to settings so config dialog can read them
+        var colNames = currentColumns.map(function (c) { return c.fieldName; });
+        tableau.extensions.settings.set('_columnNames', JSON.stringify(colNames));
+        tableau.extensions.settings.saveAsync().catch(function () {});
+
+        currentData = [];
+        tupleIds = [];
+        var rows = dataTable.data;
+
+        for (var r = 0; r < rows.length; r++) {
+          var rowObj = {};
+          for (var c = 0; c < currentColumns.length; c++) {
+            rowObj[currentColumns[c].fieldName] = {
+              value: rows[r][c].value,
+              formatted: rows[r][c].formattedValue
+            };
+          }
+          currentData.push(rowObj);
+          tupleIds.push(r + 1); // 1-based tupleId
+        }
+
+        sortCol = -1;
+        sortDir = 0;
+        renderTable();
+      }
+
+      // --- Render table ---
+      function renderTable() {
+        var prompt = document.getElementById('prompt');
+        var table = document.getElementById('data-table');
+        var thead = document.getElementById('table-head');
+        var tbody = document.getElementById('table-body');
+        var rowCountEl = document.getElementById('row-count');
+        var searchInput = document.getElementById('search-input');
+
+        if (currentColumns.length === 0 || currentData.length === 0) {
+          prompt.style.display = 'flex';
+          table.style.display = 'none';
+          rowCountEl.textContent = '';
+          return;
+        }
+
+        prompt.style.display = 'none';
+        table.style.display = 'table';
+
+        // Filter by search
+        var searchTerm = searchInput.value.trim().toLowerCase();
+        var filteredIndices = [];
+        for (var i = 0; i < currentData.length; i++) {
+          if (!searchTerm) {
+            filteredIndices.push(i);
+          } else {
+            var match = false;
+            for (var c = 0; c < currentColumns.length; c++) {
+              var cellVal = currentData[i][currentColumns[c].fieldName];
+              var displayText = cellVal ? (cellVal.formatted || String(cellVal.value || '')) : '';
+              if (displayText.toLowerCase().indexOf(searchTerm) >= 0) {
+                match = true;
+                break;
+              }
+            }
+            if (match) filteredIndices.push(i);
+          }
+        }
+
+        // Sort
+        if (sortCol >= 0 && sortDir > 0) {
+          var colName = currentColumns[sortCol].fieldName;
+          var colType = currentColumns[sortCol].dataType;
+          var dir = sortDir === 1 ? 1 : -1;
+
+          filteredIndices.sort(function (a, b) {
+            var aVal = currentData[a][colName];
+            var bVal = currentData[b][colName];
+            var aRaw = aVal ? aVal.value : null;
+            var bRaw = bVal ? bVal.value : null;
+
+            // Nulls last
+            if (aRaw === null || aRaw === '%null%' || aRaw === 'Null') return 1;
+            if (bRaw === null || bRaw === '%null%' || bRaw === 'Null') return -1;
+
+            // Numeric sort
+            if (colType === 'float' || colType === 'int') {
+              return (parseFloat(aRaw) - parseFloat(bRaw)) * dir;
+            }
+
+            // Text sort
+            var aStr = String(aVal.formatted || aRaw).toLowerCase();
+            var bStr = String(bVal.formatted || bRaw).toLowerCase();
+            if (aStr < bStr) return -1 * dir;
+            if (aStr > bStr) return 1 * dir;
+            return 0;
+          });
+        }
+
+        // Render header
+        var headerHtml = '<tr>';
+        for (var c = 0; c < currentColumns.length; c++) {
+          var col = currentColumns[c];
+          var isStatus = config.statusColumn && col.fieldName.toUpperCase() === config.statusColumn.toUpperCase();
+          var isProgress = config.progressColumn && col.fieldName.toUpperCase() === config.progressColumn.toUpperCase();
+
+          var displayName = formatColumnName(col.fieldName);
+          if (isStatus) displayName = 'Status';
+          if (isProgress) displayName = 'Progress';
+
+          var sortClass = '';
+          var arrow = '&#9650;&#9660;';
+          if (sortCol === c) {
+            if (sortDir === 1) { sortClass = 'sort-asc'; arrow = '&#9650;'; }
+            else if (sortDir === 2) { sortClass = 'sort-desc'; arrow = '&#9660;'; }
+          }
+
+          headerHtml += '<th class="' + sortClass + '" data-col="' + c + '">'
+            + escapeHtml(displayName)
+            + '<span class="sort-arrow">' + arrow + '</span></th>';
+        }
+        headerHtml += '</tr>';
+        thead.innerHTML = headerHtml;
+
+        // Attach sort handlers
+        thead.querySelectorAll('th').forEach(function (th) {
+          th.addEventListener('click', function () {
+            var colIdx = parseInt(th.dataset.col);
+            if (sortCol === colIdx) {
+              sortDir = (sortDir + 1) % 3;
+            } else {
+              sortCol = colIdx;
+              sortDir = 1;
+            }
+            renderTable();
+          });
+        });
+
+        // Render body
+        var bodyHtml = '';
+        for (var r = 0; r < filteredIndices.length; r++) {
+          var dataIdx = filteredIndices[r];
+          var row = currentData[dataIdx];
+          var bandClass = (r % 2 === 1) ? ' class="banded"' : '';
+
+          bodyHtml += '<tr' + bandClass + ' data-tuple="' + tupleIds[dataIdx] + '">';
+
+          for (var c = 0; c < currentColumns.length; c++) {
+            var col = currentColumns[c];
+            var cell = row[col.fieldName];
+            var cellValue = cell ? cell.value : null;
+            var cellFormatted = cell ? (cell.formatted || String(cell.value || '')) : '';
+            var isNull = cellValue === null || cellValue === '%null%' || cellValue === 'Null';
+
+            var isStatus = config.statusColumn && col.fieldName.toUpperCase() === config.statusColumn.toUpperCase();
+            var isProgress = config.progressColumn && col.fieldName.toUpperCase() === config.progressColumn.toUpperCase();
+
+            if (isStatus) {
+              var dotClass = getStatusDotClass(cellValue);
+              bodyHtml += '<td><span class="status-dot ' + dotClass + '"></span></td>';
+            } else if (isProgress) {
+              bodyHtml += '<td class="progress-cell">' + renderProgressBar(cellValue) + '</td>';
+            } else {
+              var displayText = isNull ? '--' : escapeHtml(cellFormatted);
+              bodyHtml += '<td title="' + escapeHtml(cellFormatted) + '">' + displayText + '</td>';
+            }
+          }
+
+          bodyHtml += '</tr>';
+        }
+        tbody.innerHTML = bodyHtml;
+
+        // Apply banding color
+        var style = document.documentElement.style;
+        style.setProperty('--banding-color', config.bandingColor);
+        tbody.querySelectorAll('tr.banded').forEach(function (tr) {
+          tr.style.background = config.bandingColor;
+        });
+
+        // Tooltip hover handlers
+        tbody.querySelectorAll('tr').forEach(function (tr) {
+          tr.addEventListener('mousemove', function (e) {
+            if (!worksheet) return;
+            var tid = parseInt(tr.dataset.tuple);
+            if (!tid) return;
+            worksheet.hoverTupleAsync(tid, {
+              tooltipAnchorPoint: { x: e.pageX, y: e.pageY }
+            }).catch(function () {});
+          });
+
+          tr.addEventListener('mouseleave', function () {
+            if (!worksheet) return;
+            worksheet.hoverTupleAsync(0, {
+              tooltipAnchorPoint: { x: 0, y: 0 }
+            }).catch(function () {});
+          });
+        });
+
+        // Row count
+        rowCountEl.textContent = filteredIndices.length + ' of ' + currentData.length + ' rows';
+      }
+
+      // --- Status dot logic ---
+      function getStatusDotClass(value) {
+        if (value === null || value === '%null%' || value === 'Null') return 'gray';
+        var num = parseFloat(value);
+        if (isNaN(num)) return 'gray';
+        if (num === config.statusGreen) return 'green';
+        if (num === config.statusYellow) return 'yellow';
+        if (num === config.statusRed) return 'red';
+        return 'gray';
+      }
+
+      // --- Progress bar logic ---
+      function renderProgressBar(value) {
+        if (value === null || value === '%null%' || value === 'Null') {
+          return '<div class="progress-bar-container"><div class="progress-bar-label">--</div></div>';
+        }
+        var num = parseFloat(value);
+        if (isNaN(num)) {
+          return '<div class="progress-bar-container"><div class="progress-bar-label">--</div></div>';
+        }
+
+        var pct = num * 100;
+        var fillWidth = Math.min(pct, 100);
+        var colorClass = 'red';
+        if (num >= config.progressGreenThreshold) colorClass = 'green';
+        else if (num >= config.progressAmberThreshold) colorClass = 'amber';
+
+        return '<div class="progress-bar-container">'
+          + '<div class="progress-bar-fill ' + colorClass + '" style="width:' + fillWidth + '%"></div>'
+          + '<div class="progress-bar-label">' + Math.round(pct) + '%</div>'
+          + '</div>';
+      }
+
+      // --- Format column name for display ---
+      function formatColumnName(name) {
+        // Convert UPPER_SNAKE to Title Case
+        return name.split('_').map(function (word) {
+          return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+        }).join(' ');
+      }
+
+      // --- Escape HTML ---
+      function escapeHtml(str) {
+        if (!str) return '';
+        return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+      }
+
+      // --- Search input handler ---
+      document.getElementById('search-input').addEventListener('input', function () {
+        renderTable();
+      });
+
+    })();
+  </script>
+</body>
+</html>
