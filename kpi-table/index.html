@@ -320,6 +320,25 @@
         toolbar.classList.toggle('hidden', !config.showSearch);
       }
 
+      // --- Get visual field order from Marks card ---
+      async function getVisualFieldOrder() {
+        try {
+          var visualSpec = await worksheet.getVisualSpecificationAsync();
+          var marksCard = visualSpec.marksSpecifications[visualSpec.activeMarksSpecificationIndex];
+          var orderedFields = [];
+          for (var i = 0; i < marksCard.encodings.length; i++) {
+            var enc = marksCard.encodings[i];
+            if (enc.field && enc.field.name) {
+              orderedFields.push(enc.field.name);
+            }
+          }
+          return orderedFields;
+        } catch (e) {
+          console.log('[KPI Table] Could not read visual spec for ordering:', e);
+          return null;
+        }
+      }
+
       // --- Fetch data and render ---
       async function updateDataAndRender() {
         if (!worksheet) return;
@@ -328,13 +347,43 @@
         var dataTable = await dataTableReader.getAllPagesAsync();
         await dataTableReader.releaseAsync();
 
-        currentColumns = dataTable.columns.map(function (col) {
+        // Build column info from data table
+        var dataColumns = dataTable.columns.map(function (col) {
           return {
             fieldName: col.fieldName,
             dataType: col.dataType,
             index: col.index
           };
         });
+
+        // Get the visual field order from the Marks card
+        var visualOrder = await getVisualFieldOrder();
+
+        // Reorder columns to match visual order (Marks card arrangement)
+        if (visualOrder && visualOrder.length > 0) {
+          var reordered = [];
+          for (var v = 0; v < visualOrder.length; v++) {
+            var vName = visualOrder[v];
+            for (var d = 0; d < dataColumns.length; d++) {
+              if (dataColumns[d].fieldName === vName ||
+                  dataColumns[d].fieldName.toUpperCase() === vName.toUpperCase()) {
+                reordered.push(dataColumns[d]);
+                break;
+              }
+            }
+          }
+          // Append any data columns not found in visual order (shouldn't happen, but safety)
+          for (var d = 0; d < dataColumns.length; d++) {
+            var found = false;
+            for (var r = 0; r < reordered.length; r++) {
+              if (reordered[r].fieldName === dataColumns[d].fieldName) { found = true; break; }
+            }
+            if (!found) reordered.push(dataColumns[d]);
+          }
+          currentColumns = reordered;
+        } else {
+          currentColumns = dataColumns;
+        }
 
         // Persist column names to settings so config dialog can read them
         var colNames = currentColumns.map(function (c) { return c.fieldName; });
@@ -347,8 +396,8 @@
 
         for (var r = 0; r < rows.length; r++) {
           var rowObj = {};
-          for (var c = 0; c < currentColumns.length; c++) {
-            rowObj[currentColumns[c].fieldName] = {
+          for (var c = 0; c < dataColumns.length; c++) {
+            rowObj[dataColumns[c].fieldName] = {
               value: rows[r][c].value,
               formatted: rows[r][c].formattedValue
             };
