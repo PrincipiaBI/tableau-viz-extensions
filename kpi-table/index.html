@@ -84,7 +84,7 @@
     th {
       background: #f5f5f5;
       border-bottom: 2px solid #ddd;
-      padding: 7px 10px;
+      padding: 7px 24px 7px 10px;
       text-align: left;
       font-size: 11px;
       font-weight: 600;
@@ -218,6 +218,146 @@
     .font-small th { font-size: 10px; padding: 5px 8px; }
     .font-large td { font-size: 14px; padding: 8px 12px; }
     .font-large th { font-size: 12px; padding: 9px 12px; }
+
+    /* Column menu dropdown */
+    th .col-menu-btn {
+      position: absolute;
+      right: 4px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 16px;
+      height: 16px;
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      opacity: 0;
+      transition: opacity 0.15s;
+      font-size: 10px;
+      color: #666;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 3px;
+      padding: 0;
+    }
+
+    th:hover .col-menu-btn {
+      opacity: 0.7;
+    }
+
+    th .col-menu-btn:hover {
+      opacity: 1;
+      background: #ddd;
+    }
+
+    .col-menu {
+      position: absolute;
+      top: 100%;
+      right: 0;
+      z-index: 100;
+      background: #fff;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      box-shadow: 0 3px 12px rgba(0,0,0,0.15);
+      min-width: 140px;
+      padding: 4px 0;
+      display: none;
+    }
+
+    .col-menu.open {
+      display: block;
+    }
+
+    .col-menu-item {
+      padding: 6px 12px;
+      font-size: 12px;
+      font-weight: 400;
+      color: #333;
+      cursor: pointer;
+      text-transform: none;
+      letter-spacing: normal;
+      white-space: nowrap;
+    }
+
+    .col-menu-item:hover {
+      background: #f0f4ff;
+    }
+
+    /* Rename input overlay */
+    .rename-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.3);
+      z-index: 200;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .rename-dialog {
+      background: #fff;
+      border-radius: 6px;
+      padding: 16px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+      min-width: 260px;
+    }
+
+    .rename-dialog label {
+      font-size: 12px;
+      font-weight: 600;
+      color: #444;
+      display: block;
+      margin-bottom: 6px;
+    }
+
+    .rename-dialog input {
+      width: 100%;
+      padding: 6px 10px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      font-size: 13px;
+      outline: none;
+    }
+
+    .rename-dialog input:focus {
+      border-color: #4a90d9;
+    }
+
+    .rename-dialog .btn-row {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .rename-dialog .btn {
+      padding: 5px 14px;
+      border: none;
+      border-radius: 4px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    .rename-dialog .btn-save {
+      background: #4a90d9;
+      color: #fff;
+    }
+
+    .rename-dialog .btn-cancel {
+      background: #e0e0e0;
+      color: #333;
+    }
+
+    .rename-dialog .btn-reset {
+      background: transparent;
+      color: #999;
+      margin-right: auto;
+      padding-left: 0;
+    }
+
+    .rename-dialog .btn-reset:hover {
+      color: #666;
+    }
   </style>
 </head>
 <body>
@@ -257,6 +397,8 @@
         bandingColor: '#f9fafb',
         fontSize: 'medium'
       };
+
+      var columnRenames = {}; // { fieldName: customDisplayName }
 
       var worksheet = null;
       var currentData = [];    // array of row objects
@@ -308,6 +450,9 @@
         config.showSearch = s.get('showSearch') !== 'false';
         config.bandingColor = s.get('bandingColor') || '#f9fafb';
         config.fontSize = s.get('fontSize') || 'medium';
+
+        var renamesStr = s.get('_columnRenames');
+        columnRenames = renamesStr ? JSON.parse(renamesStr) : {};
       }
 
       function applyFontSize() {
@@ -487,9 +632,7 @@
           var isStatus = config.statusColumn && col.fieldName.toUpperCase() === config.statusColumn.toUpperCase();
           var isProgress = config.progressColumn && col.fieldName.toUpperCase() === config.progressColumn.toUpperCase();
 
-          var displayName = formatColumnName(col.fieldName);
-          if (isStatus) displayName = 'Status';
-          if (isProgress) displayName = 'Progress';
+          var displayName = getColumnDisplayName(col.fieldName, isStatus, isProgress);
 
           var sortClass = '';
           var arrow = '&#9650;&#9660;';
@@ -498,16 +641,22 @@
             else if (sortDir === 2) { sortClass = 'sort-desc'; arrow = '&#9660;'; }
           }
 
-          headerHtml += '<th class="' + sortClass + '" data-col="' + c + '">'
-            + escapeHtml(displayName)
-            + '<span class="sort-arrow">' + arrow + '</span></th>';
+          headerHtml += '<th class="' + sortClass + '" data-col="' + c + '" data-field="' + escapeHtml(col.fieldName) + '">'
+            + '<span class="col-header-text">' + escapeHtml(displayName) + '</span>'
+            + '<span class="sort-arrow">' + arrow + '</span>'
+            + '<button class="col-menu-btn" data-col="' + c + '">&#9662;</button>'
+            + '<div class="col-menu" data-col="' + c + '">'
+            + '<div class="col-menu-item" data-action="rename">Rename Column</div>'
+            + '</div>'
+            + '</th>';
         }
         headerHtml += '</tr>';
         thead.innerHTML = headerHtml;
 
-        // Attach sort handlers
+        // Attach sort handlers (click on header text area, not menu button)
         thead.querySelectorAll('th').forEach(function (th) {
-          th.addEventListener('click', function () {
+          th.addEventListener('click', function (e) {
+            if (e.target.closest('.col-menu-btn') || e.target.closest('.col-menu')) return;
             var colIdx = parseInt(th.dataset.col);
             if (sortCol === colIdx) {
               sortDir = (sortDir + 1) % 3;
@@ -516,6 +665,29 @@
               sortDir = 1;
             }
             renderTable();
+          });
+        });
+
+        // Attach column menu handlers
+        thead.querySelectorAll('.col-menu-btn').forEach(function (btn) {
+          btn.addEventListener('click', function (e) {
+            e.stopPropagation();
+            closeAllMenus();
+            var menu = btn.parentElement.querySelector('.col-menu');
+            menu.classList.toggle('open');
+          });
+        });
+
+        thead.querySelectorAll('.col-menu-item').forEach(function (item) {
+          item.addEventListener('click', function (e) {
+            e.stopPropagation();
+            closeAllMenus();
+            var action = item.dataset.action;
+            var th = item.closest('th');
+            var fieldName = th.dataset.field;
+            if (action === 'rename') {
+              showRenameDialog(fieldName);
+            }
           });
         });
 
@@ -616,6 +788,84 @@
           + '</div>';
       }
 
+      // --- Get display name for a column (respects renames) ---
+      function getColumnDisplayName(fieldName, isStatus, isProgress) {
+        if (columnRenames[fieldName]) return columnRenames[fieldName];
+        if (isStatus) return 'Status';
+        if (isProgress) return 'Progress';
+        return formatColumnName(fieldName);
+      }
+
+      // --- Close all open column menus ---
+      function closeAllMenus() {
+        document.querySelectorAll('.col-menu.open').forEach(function (m) {
+          m.classList.remove('open');
+        });
+      }
+
+      // --- Show rename dialog ---
+      function showRenameDialog(fieldName) {
+        var currentName = columnRenames[fieldName] || formatColumnName(fieldName);
+
+        var overlay = document.createElement('div');
+        overlay.className = 'rename-overlay';
+        overlay.innerHTML = '<div class="rename-dialog">'
+          + '<label>Column Name</label>'
+          + '<input type="text" id="rename-input" value="' + escapeHtml(currentName) + '">'
+          + '<div class="btn-row">'
+          + '<button class="btn btn-reset" id="rename-reset">Reset</button>'
+          + '<button class="btn btn-cancel" id="rename-cancel">Cancel</button>'
+          + '<button class="btn btn-save" id="rename-save">Save</button>'
+          + '</div>'
+          + '</div>';
+
+        document.body.appendChild(overlay);
+
+        var input = document.getElementById('rename-input');
+        input.focus();
+        input.select();
+
+        input.addEventListener('keydown', function (e) {
+          if (e.key === 'Enter') { saveRename(); }
+          else if (e.key === 'Escape') { closeRenameDialog(); }
+        });
+
+        document.getElementById('rename-save').addEventListener('click', saveRename);
+        document.getElementById('rename-cancel').addEventListener('click', closeRenameDialog);
+        document.getElementById('rename-reset').addEventListener('click', function () {
+          delete columnRenames[fieldName];
+          persistRenames();
+          closeRenameDialog();
+          renderTable();
+        });
+
+        overlay.addEventListener('click', function (e) {
+          if (e.target === overlay) closeRenameDialog();
+        });
+
+        function saveRename() {
+          var newName = input.value.trim();
+          if (newName && newName !== formatColumnName(fieldName)) {
+            columnRenames[fieldName] = newName;
+          } else {
+            delete columnRenames[fieldName];
+          }
+          persistRenames();
+          closeRenameDialog();
+          renderTable();
+        }
+
+        function closeRenameDialog() {
+          if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+        }
+      }
+
+      // --- Persist renames to settings ---
+      function persistRenames() {
+        tableau.extensions.settings.set('_columnRenames', JSON.stringify(columnRenames));
+        tableau.extensions.settings.saveAsync().catch(function () {});
+      }
+
       // --- Format column name for display ---
       function formatColumnName(name) {
         // Convert UPPER_SNAKE to Title Case
@@ -633,6 +883,11 @@
       // --- Search input handler ---
       document.getElementById('search-input').addEventListener('input', function () {
         renderTable();
+      });
+
+      // --- Close menus on outside click ---
+      document.addEventListener('click', function () {
+        closeAllMenus();
       });
 
     })();
