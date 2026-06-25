@@ -406,6 +406,9 @@
       var sortCol = -1;
       var sortDir = 0; // 0=unsorted, 1=asc, 2=desc
       var tupleIds = [];       // parallel to currentData, stores 1-based tuple IDs
+      var internalSave = false; // guard to ignore SettingsChanged from our own saves
+      var lastDataFingerprint = ''; // detect no-op data refreshes
+      var renderPending = false;    // deferred render flag
 
       // --- Initialize ---
       window.onload = tableau.extensions.initializeAsync({ configure: showConfig }).then(function () {
@@ -416,7 +419,10 @@
         worksheet.addEventListener(tableau.TableauEventType.SummaryDataChanged, updateDataAndRender);
         tableau.extensions.settings.addEventListener(
           tableau.TableauEventType.SettingsChanged,
-          function () { loadConfig(); applyFontSize(); renderTable(); }
+          function () {
+            if (internalSave) return;
+            loadConfig(); applyFontSize(); renderTable();
+          }
         );
 
         updateDataAndRender();
@@ -526,7 +532,10 @@
         // Persist column names to settings so config dialog can read them
         var colNames = currentColumns.map(function (c) { return c.fieldName; });
         tableau.extensions.settings.set('_columnNames', JSON.stringify(colNames));
-        tableau.extensions.settings.saveAsync().catch(function () {});
+        internalSave = true;
+        tableau.extensions.settings.saveAsync().then(function () {
+          internalSave = false;
+        }).catch(function () { internalSave = false; });
 
         currentData = [];
         tupleIds = [];
@@ -544,8 +553,25 @@
           tupleIds.push(r + 1); // 1-based tupleId
         }
 
+        // Skip render if data has not changed
+        var fingerprint = currentData.length + ':' + currentColumns.map(function(c){return c.fieldName;}).join(',');
+        if (currentData.length > 0) {
+          var firstRow = currentData[0];
+          var lastRow = currentData[currentData.length - 1];
+          var firstKey = currentColumns[0] ? currentColumns[0].fieldName : '';
+          fingerprint += ':' + (firstRow[firstKey] ? firstRow[firstKey].value : '') + ':' + (lastRow[firstKey] ? lastRow[firstKey].value : '');
+        }
+        if (fingerprint === lastDataFingerprint) return;
+        lastDataFingerprint = fingerprint;
+
         sortCol = -1;
         sortDir = 0;
+
+        // Defer render if a menu or rename dialog is open
+        if (document.querySelector('.col-menu.open') || document.querySelector('.rename-overlay')) {
+          renderPending = true;
+          return;
+        }
         renderTable();
       }
 
@@ -796,6 +822,14 @@
         });
       }
 
+      // --- Flush deferred render if one is waiting ---
+      function flushPendingRender() {
+        if (renderPending) {
+          renderPending = false;
+          renderTable();
+        }
+      }
+
       // --- Show rename dialog ---
       function showRenameDialog(fieldName) {
         var currentName = columnRenames[fieldName] || formatColumnName(fieldName);
@@ -850,13 +884,17 @@
 
         function closeRenameDialog() {
           if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+          flushPendingRender();
         }
       }
 
       // --- Persist renames to settings ---
       function persistRenames() {
         tableau.extensions.settings.set('_columnRenames', JSON.stringify(columnRenames));
-        tableau.extensions.settings.saveAsync().catch(function () {});
+        internalSave = true;
+        tableau.extensions.settings.saveAsync().then(function () {
+          internalSave = false;
+        }).catch(function () { internalSave = false; });
       }
 
       // --- Format column name for display ---
@@ -881,6 +919,7 @@
       // --- Close menus on outside click ---
       document.addEventListener('click', function () {
         closeAllMenus();
+        flushPendingRender();
       });
 
     })();
