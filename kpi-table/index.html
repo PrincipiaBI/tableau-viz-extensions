@@ -465,7 +465,7 @@
         toolbar.classList.toggle('hidden', !config.showSearch);
       }
 
-      // --- Get visual field order from Marks card ---
+      // --- Get visual field order from Marks card (Detail shelf only) ---
       async function getVisualFieldOrder() {
         try {
           var visualSpec = await worksheet.getVisualSpecificationAsync();
@@ -473,7 +473,7 @@
           var orderedFields = [];
           for (var i = 0; i < marksCard.encodings.length; i++) {
             var enc = marksCard.encodings[i];
-            if (enc.field && enc.field.name) {
+            if (enc.id === 'detail' && enc.field && enc.field.name) {
               orderedFields.push(enc.field.name);
             }
           }
@@ -501,10 +501,10 @@
           };
         });
 
-        // Get the visual field order from the Marks card
+        // Get the Detail-only field order from the Marks card
         var visualOrder = await getVisualFieldOrder();
 
-        // Reorder columns to match visual order (Marks card arrangement)
+        // Only show columns that are on Detail (exclude Tooltip-only fields)
         if (visualOrder && visualOrder.length > 0) {
           var reordered = [];
           for (var v = 0; v < visualOrder.length; v++) {
@@ -517,16 +517,9 @@
               }
             }
           }
-          // Append any data columns not found in visual order (shouldn't happen, but safety)
-          for (var d = 0; d < dataColumns.length; d++) {
-            var found = false;
-            for (var r = 0; r < reordered.length; r++) {
-              if (reordered[r].fieldName === dataColumns[d].fieldName) { found = true; break; }
-            }
-            if (!found) reordered.push(dataColumns[d]);
-          }
           currentColumns = reordered;
         } else {
+          // Fallback: show all columns if visual spec unavailable
           currentColumns = dataColumns;
         }
 
