@@ -451,6 +451,7 @@
       var worksheet = null;
       var currentData = [];    // array of row objects
       var currentColumns = []; // array of column info objects
+      var allDataColumns = []; // all columns including tooltip-shelf fields
       var sortCol = -1;
       var sortDir = 0; // 0=unsorted, 1=asc, 2=desc
       var tupleIds = [];       // parallel to currentData, stores 1-based tuple IDs
@@ -554,6 +555,7 @@
             index: col.index
           };
         });
+        allDataColumns = dataColumns;
 
         // Get the Detail-only field order from the Marks card
         var visualOrder = await getVisualFieldOrder();
@@ -824,19 +826,23 @@
         var touchTooltipEl = document.getElementById('touch-tooltip');
         var touchIndicator = document.getElementById('touch-indicator');
         if ('ontouchstart' in window) {
-          touchIndicator.textContent = '(touch v3)';
+          touchIndicator.textContent = '(touch v4)';
         }
 
         function showTouchTooltip(dataIdx, x, y) {
           var row = currentData[dataIdx];
           if (!row) return;
           var html = '';
-          for (var c = 0; c < currentColumns.length; c++) {
-            var col = currentColumns[c];
+          var cols = allDataColumns.length > 0 ? allDataColumns : currentColumns;
+          for (var c = 0; c < cols.length; c++) {
+            var col = cols[c];
+            var isStatus = config.statusColumn && col.fieldName.toUpperCase() === config.statusColumn.toUpperCase();
+            var isProgress = config.progressColumn && col.fieldName.toUpperCase() === config.progressColumn.toUpperCase();
+            var displayName = getColumnDisplayName(col.fieldName, isStatus, isProgress);
             var cell = row[col.fieldName];
             var val = cell ? (cell.formatted || String(cell.value || '')) : '--';
             if (val === '%null%' || val === 'Null') val = '--';
-            html += '<div class="tt-row"><span class="tt-label">' + escapeHtml(col.fieldName) + '</span><span class="tt-value">' + escapeHtml(val) + '</span></div>';
+            html += '<div class="tt-row"><span class="tt-label">' + escapeHtml(displayName) + '</span><span class="tt-value">' + escapeHtml(val) + '</span></div>';
           }
           touchTooltipEl.innerHTML = html;
           // Position: above the tap, centered
