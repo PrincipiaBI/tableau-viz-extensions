@@ -61,6 +61,46 @@
       margin-left: auto;
     }
 
+    /* Custom touch tooltip */
+    .touch-tooltip {
+      display: none;
+      position: fixed;
+      z-index: 9999;
+      background: #fff;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      padding: 10px 14px;
+      font-size: 12px;
+      max-width: 280px;
+      max-height: 60vh;
+      overflow-y: auto;
+      pointer-events: none;
+    }
+    .touch-tooltip.visible {
+      display: block;
+    }
+    .touch-tooltip .tt-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 3px 0;
+      border-bottom: 1px solid #f0f0f0;
+    }
+    .touch-tooltip .tt-row:last-child {
+      border-bottom: none;
+    }
+    .touch-tooltip .tt-label {
+      color: #666;
+      font-weight: 500;
+      white-space: nowrap;
+    }
+    .touch-tooltip .tt-value {
+      color: #222;
+      text-align: right;
+      word-break: break-word;
+    }
+
     /* Table wrapper */
     .table-wrapper {
       flex: 1;
@@ -367,6 +407,7 @@
   </style>
 </head>
 <body>
+  <div class="touch-tooltip" id="touch-tooltip"></div>
   <div class="table-container" id="table-container">
     <div class="toolbar" id="toolbar">
       <input type="text" class="search-input" id="search-input" placeholder="Search...">
@@ -780,9 +821,45 @@
         // Touch tooltip handlers (mobile/iPad)
         var activeTouchRow = null;
         var touchMoved = false;
+        var touchTooltipEl = document.getElementById('touch-tooltip');
         var touchIndicator = document.getElementById('touch-indicator');
         if ('ontouchstart' in window) {
-          touchIndicator.textContent = '(touch v2)';
+          touchIndicator.textContent = '(touch v3)';
+        }
+
+        function showTouchTooltip(dataIdx, x, y) {
+          var row = currentData[dataIdx];
+          if (!row) return;
+          var html = '';
+          for (var c = 0; c < currentColumns.length; c++) {
+            var col = currentColumns[c];
+            var cell = row[col.fieldName];
+            var val = cell ? (cell.formatted || String(cell.value || '')) : '--';
+            if (val === '%null%' || val === 'Null') val = '--';
+            html += '<div class="tt-row"><span class="tt-label">' + escapeHtml(col.fieldName) + '</span><span class="tt-value">' + escapeHtml(val) + '</span></div>';
+          }
+          touchTooltipEl.innerHTML = html;
+          // Position: above the tap, centered
+          var vpW = window.innerWidth;
+          var vpH = window.innerHeight;
+          var left = Math.min(Math.max(x - 140, 8), vpW - 288);
+          var top = y - 20;
+          touchTooltipEl.style.left = left + 'px';
+          touchTooltipEl.style.top = top + 'px';
+          touchTooltipEl.classList.add('visible');
+          // Adjust if overflows bottom
+          var rect = touchTooltipEl.getBoundingClientRect();
+          if (rect.bottom > vpH - 10) {
+            touchTooltipEl.style.top = (y - rect.height - 10) + 'px';
+          }
+        }
+
+        function hideTouchTooltip() {
+          touchTooltipEl.classList.remove('visible');
+          if (activeTouchRow) {
+            activeTouchRow.classList.remove('touch-active');
+            activeTouchRow = null;
+          }
         }
 
         tbody.querySelectorAll('tr').forEach(function (tr) {
@@ -793,42 +870,29 @@
             touchMoved = true;
           });
           tr.addEventListener('touchend', function (e) {
-            if (touchMoved) return; // was a scroll, not a tap
-            if (!worksheet) return;
+            if (touchMoved) return;
             var tid = parseInt(tr.dataset.tuple);
             if (!tid) return;
             var touch = e.changedTouches[0];
+            var dataIdx = tid - 1; // tupleIds are 1-based
 
             if (activeTouchRow === tr) {
-              worksheet.hoverTupleAsync(0, {
-                tooltipAnchorPoint: { x: 0, y: 0 }
-              }).catch(function () {});
-              tr.classList.remove('touch-active');
-              activeTouchRow = null;
+              hideTouchTooltip();
             } else {
               if (activeTouchRow) {
                 activeTouchRow.classList.remove('touch-active');
-                worksheet.hoverTupleAsync(0, {
-                  tooltipAnchorPoint: { x: 0, y: 0 }
-                }).catch(function () {});
               }
-              worksheet.hoverTupleAsync(tid, {
-                tooltipAnchorPoint: { x: touch.pageX, y: touch.pageY }
-              }).catch(function () {});
               tr.classList.add('touch-active');
               activeTouchRow = tr;
+              showTouchTooltip(dataIdx, touch.clientX, touch.clientY);
             }
             e.preventDefault();
           });
         });
 
         document.addEventListener('touchend', function (e) {
-          if (activeTouchRow && !tbody.contains(e.target)) {
-            worksheet.hoverTupleAsync(0, {
-              tooltipAnchorPoint: { x: 0, y: 0 }
-            }).catch(function () {});
-            activeTouchRow.classList.remove('touch-active');
-            activeTouchRow = null;
+          if (activeTouchRow && !tbody.contains(e.target) && !touchTooltipEl.contains(e.target)) {
+            hideTouchTooltip();
           }
         });
 
