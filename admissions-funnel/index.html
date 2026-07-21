@@ -289,6 +289,27 @@
             }).catch(function () {});
           });
 
+          // Touch tooltip (mobile/iPad) via selectTuplesAsync
+          (function () {
+            var touchMoved = false;
+            el.addEventListener('touchstart', function () { touchMoved = false; });
+            el.addEventListener('touchmove', function () { touchMoved = true; });
+            el.addEventListener('touchend', function (e) {
+              if (touchMoved) return;
+              if (!worksheet || !config.tooltipEnabled) return;
+              var stageIdx = parseInt(el.dataset.index);
+              var tupleId = stageTupleIds[stageIdx];
+              if (tupleId === null || tupleId === undefined) return;
+              var touch = e.changedTouches[0];
+              if (typeof worksheet.selectTuplesAsync === 'function') {
+                worksheet.selectTuplesAsync([tupleId], tableau.SelectOptions.Simple, {
+                  tooltipAnchorPoint: { x: touch.pageX, y: touch.pageY }
+                }).catch(function () {});
+              }
+              e.preventDefault();
+            });
+          })();
+
           container.appendChild(el);
         });
 

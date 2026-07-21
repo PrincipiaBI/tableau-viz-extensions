@@ -412,7 +412,6 @@
     <div class="toolbar" id="toolbar">
       <input type="text" class="search-input" id="search-input" placeholder="Search...">
       <span class="row-count" id="row-count"></span>
-      <span id="touch-indicator" style="font-size:10px;color:#999;margin-left:6px;"></span>
     </div>
     <div class="table-wrapper" id="table-wrapper">
       <div class="prompt" id="prompt">
@@ -824,10 +823,6 @@
         var activeTouchRow = null;
         var touchMoved = false;
         var touchTooltipEl = document.getElementById('touch-tooltip');
-        var touchIndicator = document.getElementById('touch-indicator');
-        if ('ontouchstart' in window) {
-          touchIndicator.textContent = '(touch v5)';
-        }
 
         function showTouchTooltip(dataIdx, x, y) {
           var row = currentData[dataIdx];

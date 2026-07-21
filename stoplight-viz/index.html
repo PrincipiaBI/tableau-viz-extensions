@@ -93,6 +93,22 @@
         worksheet.hoverTupleAsync(0, { tooltipAnchorPoint: { x: 0, y: 0 } }).catch(() => {});
       });
 
+      // --- Touch tooltip (mobile/iPad) via selectTuplesAsync ---
+      let touchMoved = false;
+      stoplightEl.addEventListener('touchstart', function () { touchMoved = false; });
+      stoplightEl.addEventListener('touchmove', function () { touchMoved = true; });
+      stoplightEl.addEventListener('touchend', function (e) {
+        if (touchMoved) return;
+        if (!worksheet || !config.tooltipEnabled || currentTupleId === null) return;
+        const touch = e.changedTouches[0];
+        if (typeof worksheet.selectTuplesAsync === 'function') {
+          worksheet.selectTuplesAsync([currentTupleId], tableau.SelectOptions.Simple, {
+            tooltipAnchorPoint: { x: touch.pageX, y: touch.pageY }
+          }).catch(() => {});
+        }
+        e.preventDefault();
+      });
+
       // --- Load config from settings ---
       function loadConfig() {
         const s = tableau.extensions.settings;
