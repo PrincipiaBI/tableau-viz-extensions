@@ -826,7 +826,7 @@
         var touchTooltipEl = document.getElementById('touch-tooltip');
         var touchIndicator = document.getElementById('touch-indicator');
         if ('ontouchstart' in window) {
-          touchIndicator.textContent = '(touch v4)';
+          touchIndicator.textContent = '(touch v5)';
         }
 
         function showTouchTooltip(dataIdx, x, y) {
@@ -877,20 +877,35 @@
           });
           tr.addEventListener('touchend', function (e) {
             if (touchMoved) return;
+            if (!worksheet) return;
             var tid = parseInt(tr.dataset.tuple);
             if (!tid) return;
             var touch = e.changedTouches[0];
-            var dataIdx = tid - 1; // tupleIds are 1-based
+            var dataIdx = tid - 1;
 
             if (activeTouchRow === tr) {
+              // Tap same row — deselect and hide
               hideTouchTooltip();
+              worksheet.clearSelectedMarksAsync().catch(function () {});
             } else {
               if (activeTouchRow) {
                 activeTouchRow.classList.remove('touch-active');
               }
               tr.classList.add('touch-active');
               activeTouchRow = tr;
-              showTouchTooltip(dataIdx, touch.clientX, touch.clientY);
+
+              // Try native tooltip via selectTuplesAsync first
+              if (typeof worksheet.selectTuplesAsync === 'function') {
+                worksheet.selectTuplesAsync([tid], tableau.SelectOptions.Simple, {
+                  tooltipAnchorPoint: { x: touch.pageX, y: touch.pageY }
+                }).catch(function () {
+                  // Fallback to custom tooltip if API fails
+                  showTouchTooltip(dataIdx, touch.clientX, touch.clientY);
+                });
+              } else {
+                // Fallback for older Tableau versions without selectTuplesAsync
+                showTouchTooltip(dataIdx, touch.clientX, touch.clientY);
+              }
             }
             e.preventDefault();
           });
@@ -899,6 +914,7 @@
         document.addEventListener('touchend', function (e) {
           if (activeTouchRow && !tbody.contains(e.target) && !touchTooltipEl.contains(e.target)) {
             hideTouchTooltip();
+            worksheet.clearSelectedMarksAsync().catch(function () {});
           }
         });
 
