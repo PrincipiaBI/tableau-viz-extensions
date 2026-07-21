@@ -129,7 +129,13 @@
       background: #f9fafb;
     }
 
-    tr:hover {
+    @media (hover: hover) {
+      tr:hover {
+        background: #eef4fb !important;
+      }
+    }
+
+    tr.touch-active {
       background: #eef4fb !important;
     }
 
@@ -768,6 +774,48 @@
               tooltipAnchorPoint: { x: 0, y: 0 }
             }).catch(function () {});
           });
+        });
+
+        // Touch tooltip handlers (mobile/iPad)
+        var activeTouchRow = null;
+        tbody.querySelectorAll('tr').forEach(function (tr) {
+          tr.addEventListener('touchstart', function (e) {
+            if (!worksheet) return;
+            var tid = parseInt(tr.dataset.tuple);
+            if (!tid) return;
+            var touch = e.touches[0];
+
+            if (activeTouchRow === tr) {
+              worksheet.hoverTupleAsync(0, {
+                tooltipAnchorPoint: { x: 0, y: 0 }
+              }).catch(function () {});
+              tr.classList.remove('touch-active');
+              activeTouchRow = null;
+            } else {
+              if (activeTouchRow) {
+                activeTouchRow.classList.remove('touch-active');
+                worksheet.hoverTupleAsync(0, {
+                  tooltipAnchorPoint: { x: 0, y: 0 }
+                }).catch(function () {});
+              }
+              worksheet.hoverTupleAsync(tid, {
+                tooltipAnchorPoint: { x: touch.pageX, y: touch.pageY }
+              }).catch(function () {});
+              tr.classList.add('touch-active');
+              activeTouchRow = tr;
+            }
+            e.preventDefault();
+          });
+        });
+
+        document.addEventListener('touchstart', function (e) {
+          if (activeTouchRow && !tbody.contains(e.target)) {
+            worksheet.hoverTupleAsync(0, {
+              tooltipAnchorPoint: { x: 0, y: 0 }
+            }).catch(function () {});
+            activeTouchRow.classList.remove('touch-active');
+            activeTouchRow = null;
+          }
         });
 
         // Row count
