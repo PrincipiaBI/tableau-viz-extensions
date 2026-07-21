@@ -371,6 +371,7 @@
     <div class="toolbar" id="toolbar">
       <input type="text" class="search-input" id="search-input" placeholder="Search...">
       <span class="row-count" id="row-count"></span>
+      <span id="touch-indicator" style="font-size:10px;color:#999;margin-left:6px;"></span>
     </div>
     <div class="table-wrapper" id="table-wrapper">
       <div class="prompt" id="prompt">
@@ -778,12 +779,25 @@
 
         // Touch tooltip handlers (mobile/iPad)
         var activeTouchRow = null;
+        var touchMoved = false;
+        var touchIndicator = document.getElementById('touch-indicator');
+        if ('ontouchstart' in window) {
+          touchIndicator.textContent = '(touch v2)';
+        }
+
         tbody.querySelectorAll('tr').forEach(function (tr) {
-          tr.addEventListener('touchstart', function (e) {
+          tr.addEventListener('touchstart', function () {
+            touchMoved = false;
+          });
+          tr.addEventListener('touchmove', function () {
+            touchMoved = true;
+          });
+          tr.addEventListener('touchend', function (e) {
+            if (touchMoved) return; // was a scroll, not a tap
             if (!worksheet) return;
             var tid = parseInt(tr.dataset.tuple);
             if (!tid) return;
-            var touch = e.touches[0];
+            var touch = e.changedTouches[0];
 
             if (activeTouchRow === tr) {
               worksheet.hoverTupleAsync(0, {
@@ -808,7 +822,7 @@
           });
         });
 
-        document.addEventListener('touchstart', function (e) {
+        document.addEventListener('touchend', function (e) {
           if (activeTouchRow && !tbody.contains(e.target)) {
             worksheet.hoverTupleAsync(0, {
               tooltipAnchorPoint: { x: 0, y: 0 }
