@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest manifest-version="0.1" xmlns="http://www.tableau.com/xml/extension_manifest">
+  <worksheet-extension id="com.principiabi.school-finaid-table" extension-version="1.0.0">
+    <default-locale>en_US</default-locale>
+    <name resource-id="name"/>
+    <description>Interactive styled table with search, sort, row banding, status dots, and progress bars. Designed for School Financial Aid dashboards.</description>
+    <author name="PrincipiaBI" email="kevin.capp@principia.edu" organization="Principia" website="https://github.com/PrincipiaBI"/>
+    <min-api-version>1.12</min-api-version>
+    <source-location>
+      <url>https://principiabi.github.io/tableau-viz-extensions/school-finaid-table/index.html</url>
+    </source-location>
+    <icon/>
+    <permissions>
+      <permission>full data</permission>
+    </permissions>
+    <context-menu>
+      <configure-context-menu-item/>
+    </context-menu>
+  </worksheet-extension>
+  <resources>
+    <resource id="name">
+      <text locale="en_US">School Financial Aid Table</text>
+    </resource>
+  </resources>
+</manifest>

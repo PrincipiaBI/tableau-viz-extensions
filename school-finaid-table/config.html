@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>School Financial Aid Table Settings</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      padding: 20px;
+      background: #fff;
+      color: #333;
+    }
+
+    h2 {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      color: #222;
+    }
+
+    .section {
+      margin-bottom: 20px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid #eee;
+    }
+
+    .section:last-of-type {
+      border-bottom: none;
+    }
+
+    .section-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: #555;
+      margin-bottom: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+
+    .field-row {
+      display: flex;
+      align-items: center;
+      margin-bottom: 10px;
+      gap: 10px;
+    }
+
+    .field-row label {
+      font-size: 12px;
+      color: #555;
+      min-width: 120px;
+    }
+
+    select, input[type="number"], input[type="color"], input[type="text"] {
+      padding: 5px 8px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      font-size: 12px;
+      outline: none;
+    }
+
+    select {
+      flex: 1;
+      max-width: 200px;
+    }
+
+    input[type="number"] {
+      width: 70px;
+    }
+
+    input[type="color"] {
+      width: 40px;
+      height: 28px;
+      padding: 2px;
+      cursor: pointer;
+    }
+
+    .checkbox-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .checkbox-row label {
+      font-size: 12px;
+      color: #555;
+    }
+
+    .btn-row {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      margin-top: 20px;
+    }
+
+    .btn {
+      padding: 8px 20px;
+      border: none;
+      border-radius: 4px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+    }
+
+    .btn-primary {
+      background: #4a90d9;
+      color: #fff;
+    }
+
+    .btn-primary:hover {
+      background: #3a7bc0;
+    }
+
+    .btn-secondary {
+      background: #e0e0e0;
+      color: #333;
+    }
+
+    .btn-secondary:hover {
+      background: #ccc;
+    }
+
+    .hint {
+      font-size: 11px;
+      color: #999;
+      margin-top: 2px;
+    }
+  </style>
+</head>
+<body>
+  <h2>School Financial Aid Table Settings</h2>
+
+  <div class="section">
+    <div class="section-title">Column Rendering</div>
+    <div class="field-row">
+      <label>Status Dot Column:</label>
+      <select id="statusColumn">
+        <option value="">(None)</option>
+      </select>
+    </div>
+    <div class="hint">Renders as a colored dot. Values: 1=Green, 2=Yellow, 3=Red</div>
+
+    <div class="field-row" style="margin-top: 12px;">
+      <label>Progress Bar Column:</label>
+      <select id="progressColumn">
+        <option value="">(None)</option>
+      </select>
+    </div>
+    <div class="hint">Renders as a horizontal bar. Expects decimal ratio (e.g., 0.85 = 85%)</div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Status Codes</div>
+    <div class="field-row">
+      <label>Green (on track):</label>
+      <input type="number" id="statusGreen" value="1" step="1">
+    </div>
+    <div class="field-row">
+      <label>Yellow (at risk):</label>
+      <input type="number" id="statusYellow" value="2" step="1">
+    </div>
+    <div class="field-row">
+      <label>Red (off track):</label>
+      <input type="number" id="statusRed" value="3" step="1">
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Progress Thresholds</div>
+    <div class="field-row">
+      <label>Green at or above:</label>
+      <input type="number" id="progressGreen" value="100" step="1" min="0" max="200">
+      <span style="font-size:12px;">%</span>
+    </div>
+    <div class="field-row">
+      <label>Amber at or above:</label>
+      <input type="number" id="progressAmber" value="90" step="1" min="0" max="200">
+      <span style="font-size:12px;">%</span>
+    </div>
+    <div class="hint">Below amber threshold renders as red.</div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Appearance</div>
+    <div class="checkbox-row">
+      <input type="checkbox" id="showSearch" checked>
+      <label for="showSearch">Show search bar</label>
+    </div>
+    <div class="field-row">
+      <label>Row banding color:</label>
+      <input type="color" id="bandingColor" value="#f9fafb">
+    </div>
+    <div class="field-row">
+      <label>Font size:</label>
+      <select id="fontSize">
+        <option value="small">Small</option>
+        <option value="medium" selected>Medium</option>
+        <option value="large">Large</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="btn-row">
+    <button class="btn btn-secondary" id="btn-cancel">Cancel</button>
+    <button class="btn btn-primary" id="btn-save">Save</button>
+  </div>
+
+  <script src="../lib/tableau.extensions.1.latest.min.js"></script>
+  <script>
+    'use strict';
+    (function () {
+
+      var columnNames = [];
+
+      tableau.extensions.initializeDialogAsync().then(function () {
+        var s = tableau.extensions.settings;
+
+        // Get column names from the worksheet data
+        loadColumnNames().then(function () {
+          populateDropdowns();
+          loadCurrentSettings(s);
+        });
+      });
+
+      async function loadColumnNames() {
+        try {
+          // Access the worksheet through the parent extension context
+          var dashboard = tableau.extensions.dashboardContent;
+          // For viz extensions, we access via settings - store column names there
+          var colNamesStr = tableau.extensions.settings.get('_columnNames');
+          if (colNamesStr) {
+            columnNames = JSON.parse(colNamesStr);
+          }
+        } catch (e) {
+          console.log('[KPI Table Config] Could not load columns:', e);
+        }
+      }
+
+      function populateDropdowns() {
+        var statusSelect = document.getElementById('statusColumn');
+        var progressSelect = document.getElementById('progressColumn');
+
+        columnNames.forEach(function (name) {
+          var opt1 = document.createElement('option');
+          opt1.value = name;
+          opt1.textContent = name;
+          statusSelect.appendChild(opt1);
+
+          var opt2 = document.createElement('option');
+          opt2.value = name;
+          opt2.textContent = name;
+          progressSelect.appendChild(opt2);
+        });
+      }
+
+      function loadCurrentSettings(s) {
+        var statusCol = s.get('statusColumn') || '';
+        var progressCol = s.get('progressColumn') || '';
+        document.getElementById('statusColumn').value = statusCol;
+        document.getElementById('progressColumn').value = progressCol;
+
+        document.getElementById('statusGreen').value = s.get('statusGreen') || '1';
+        document.getElementById('statusYellow').value = s.get('statusYellow') || '2';
+        document.getElementById('statusRed').value = s.get('statusRed') || '3';
+
+        var pg = s.get('progressGreenThreshold');
+        var pa = s.get('progressAmberThreshold');
+        document.getElementById('progressGreen').value = pg ? Math.round(parseFloat(pg) * 100) : '100';
+        document.getElementById('progressAmber').value = pa ? Math.round(parseFloat(pa) * 100) : '90';
+
+        document.getElementById('showSearch').checked = s.get('showSearch') !== 'false';
+        document.getElementById('bandingColor').value = s.get('bandingColor') || '#f9fafb';
+        document.getElementById('fontSize').value = s.get('fontSize') || 'medium';
+      }
+
+      // Save
+      document.getElementById('btn-save').addEventListener('click', function () {
+        var s = tableau.extensions.settings;
+
+        s.set('statusColumn', document.getElementById('statusColumn').value);
+        s.set('progressColumn', document.getElementById('progressColumn').value);
+        s.set('statusGreen', document.getElementById('statusGreen').value);
+        s.set('statusYellow', document.getElementById('statusYellow').value);
+        s.set('statusRed', document.getElementById('statusRed').value);
+        s.set('progressGreenThreshold', String(parseInt(document.getElementById('progressGreen').value) / 100));
+        s.set('progressAmberThreshold', String(parseInt(document.getElementById('progressAmber').value) / 100));
+        s.set('showSearch', document.getElementById('showSearch').checked ? 'true' : 'false');
+        s.set('bandingColor', document.getElementById('bandingColor').value);
+        s.set('fontSize', document.getElementById('fontSize').value);
+
+        s.saveAsync().then(function () {
+          tableau.extensions.ui.closeDialog('');
+        });
+      });
+
+      // Cancel
+      document.getElementById('btn-cancel').addEventListener('click', function () {
+        tableau.extensions.ui.closeDialog('');
+      });
+
+    })();
+  </script>
+</body>
+</html>
