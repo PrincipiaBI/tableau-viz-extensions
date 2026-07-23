@@ -542,8 +542,13 @@
         }
       }
 
-      // --- Fetch data and render ---
-      async function updateDataAndRender() {
+      // --- Fetch data and render (debounced) ---
+      var _updateTimer = null;
+      function updateDataAndRender() {
+        if (_updateTimer) clearTimeout(_updateTimer);
+        _updateTimer = setTimeout(_doUpdateDataAndRender, 200);
+      }
+      async function _doUpdateDataAndRender() {
         if (!worksheet) return;
 
         var dataTableReader = await worksheet.getSummaryDataReaderAsync();
@@ -582,13 +587,17 @@
           currentColumns = dataColumns;
         }
 
-        // Persist column names to settings so config dialog can read them
+        // Persist column names to settings only if they changed (avoids triggering SettingsChanged in config dialog)
         var colNames = currentColumns.map(function (c) { return c.fieldName; });
-        tableau.extensions.settings.set('_columnNames', JSON.stringify(colNames));
-        internalSave = true;
-        tableau.extensions.settings.saveAsync().then(function () {
-          internalSave = false;
-        }).catch(function () { internalSave = false; });
+        var colNamesStr = JSON.stringify(colNames);
+        var existingColNames = tableau.extensions.settings.get('_columnNames') || '';
+        if (colNamesStr !== existingColNames) {
+          tableau.extensions.settings.set('_columnNames', colNamesStr);
+          internalSave = true;
+          tableau.extensions.settings.saveAsync().then(function () {
+            internalSave = false;
+          }).catch(function () { internalSave = false; });
+        }
 
         currentData = [];
         tupleIds = [];
