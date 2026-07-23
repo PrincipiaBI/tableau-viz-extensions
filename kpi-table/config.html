@@ -183,6 +183,13 @@
   </div>
 
   <div class="section">
+    <div class="section-title">Default Sort</div>
+    <div id="sort-fields-container"></div>
+    <button class="btn btn-secondary" id="btn-add-sort" style="margin-top:8px;padding:5px 12px;font-size:11px;">+ Add Sort Field</button>
+    <div class="hint" style="margin-top:6px;">Rows are sorted by these fields on load. First field is primary sort.</div>
+  </div>
+
+  <div class="section">
     <div class="section-title">Appearance</div>
     <div class="checkbox-row">
       <input type="checkbox" id="showSearch" checked>
@@ -255,6 +262,47 @@
         });
       }
 
+      function buildSortRow(col, dir) {
+        var container = document.getElementById('sort-fields-container');
+        var row = document.createElement('div');
+        row.className = 'field-row';
+        row.style.marginBottom = '6px';
+
+        var sel = document.createElement('select');
+        sel.style.flex = '1';
+        sel.style.maxWidth = '160px';
+        var emptyOpt = document.createElement('option');
+        emptyOpt.value = ''; emptyOpt.textContent = '(Select column)';
+        sel.appendChild(emptyOpt);
+        columnNames.forEach(function(name) {
+          var opt = document.createElement('option');
+          opt.value = name; opt.textContent = name;
+          if (name === col) opt.selected = true;
+          sel.appendChild(opt);
+        });
+
+        var dirSel = document.createElement('select');
+        dirSel.style.width = '80px';
+        var ascOpt = document.createElement('option');
+        ascOpt.value = 'asc'; ascOpt.textContent = 'A-Z / Low';
+        var descOpt = document.createElement('option');
+        descOpt.value = 'desc'; descOpt.textContent = 'Z-A / High';
+        dirSel.appendChild(ascOpt); dirSel.appendChild(descOpt);
+        dirSel.value = dir || 'asc';
+
+        var removeBtn = document.createElement('button');
+        removeBtn.textContent = '\u00d7';
+        removeBtn.style.cssText = 'border:none;background:transparent;font-size:16px;cursor:pointer;color:#c00;padding:0 4px;';
+        removeBtn.addEventListener('click', function() { container.removeChild(row); });
+
+        row.appendChild(sel); row.appendChild(dirSel); row.appendChild(removeBtn);
+        container.appendChild(row);
+      }
+
+      document.getElementById('btn-add-sort').addEventListener('click', function() {
+        buildSortRow('', 'asc');
+      });
+
       function loadCurrentSettings(s) {
         var statusCol = s.get('statusColumn') || '';
         var progressCol = s.get('progressColumn') || '';
@@ -273,6 +321,10 @@
         document.getElementById('showSearch').checked = s.get('showSearch') !== 'false';
         document.getElementById('bandingColor').value = s.get('bandingColor') || '#f9fafb';
         document.getElementById('fontSize').value = s.get('fontSize') || 'medium';
+
+        var sortStr = s.get('defaultSort');
+        var sortArr = sortStr ? JSON.parse(sortStr) : [];
+        sortArr.forEach(function(sf) { buildSortRow(sf.column, sf.direction); });
       }
 
       // Save
@@ -289,6 +341,16 @@
         s.set('showSearch', document.getElementById('showSearch').checked ? 'true' : 'false');
         s.set('bandingColor', document.getElementById('bandingColor').value);
         s.set('fontSize', document.getElementById('fontSize').value);
+
+        var sortRows = document.getElementById('sort-fields-container').querySelectorAll('.field-row');
+        var sortArr = [];
+        sortRows.forEach(function(row) {
+          var selects = row.querySelectorAll('select');
+          var col = selects[0].value;
+          var dir = selects[1].value;
+          if (col) sortArr.push({column: col, direction: dir});
+        });
+        s.set('defaultSort', JSON.stringify(sortArr));
 
         s.saveAsync().then(function () {
           tableau.extensions.ui.closeDialog('');
