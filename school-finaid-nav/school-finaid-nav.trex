@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest manifest-version="0.1" xmlns="http://www.tableau.com/xml/extension_manifest">
+  <dashboard-extension id="com.principiabi.school-finaid-nav" extension-version="1.0.0">
+    <default-locale>en_US</default-locale>
+    <name resource-id="name"/>
+    <description>Navigation buttons for School Financial Aid Dashboard</description>
+    <author name="PrincipiaBI" email="kevin.capp@principia.edu" organization="Principia" website="https://github.com/PrincipiaBI"/>
+    <min-api-version>1.4</min-api-version>
+    <source-location>
+      <url>https://principiabi.github.io/tableau-viz-extensions/school-finaid-nav/index.html</url>
+    </source-location>
+    <icon/>
+    <permissions>
+      <permission>full data</permission>
+    </permissions>
+  </dashboard-extension>
+  <resources>
+    <resource id="name">
+      <text locale="en_US">School Financial Aid Navigation</text>
+    </resource>
+  </resources>
+</manifest>

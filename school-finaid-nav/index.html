@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>School Financial Aid Navigation</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #e8e8e8;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+    body { display: flex; align-items: center; justify-content: center; }
+    .nav-container { display: flex; align-items: center; justify-content: center;
+      width: 100%; height: 100%; padding: 4px 8px; gap: 6px; flex-wrap: nowrap; }
+    .nav-btn { display: flex; align-items: center; justify-content: center; flex: 1 1 0;
+      height: calc(100% - 8px); max-height: 42px; padding: 6px 16px; background: #ffffff;
+      border: 1px solid #c0c0c0; border-radius: 3px; color: #2c3e5a; font-size: 13px;
+      font-weight: 500; text-align: center; white-space: nowrap; cursor: pointer;
+      transition: all 0.15s ease; user-select: none; }
+    .nav-btn:hover { background: #f0f4f8; border-color: #2c3e5a; }
+    .nav-btn.active { background: #2c3e5a; color: #ffffff; border-color: #2c3e5a;
+      font-weight: 600; cursor: default; }
+    .nav-btn.active:hover { background: #2c3e5a; }
+  </style>
+</head>
+<body>
+  <div class="nav-container" id="nav-container"></div>
+  <script src="../lib/tableau.extensions.1.latest.min.js"></script>
+  <script>
+    'use strict';
+    (function () {
+      var BUTTONS = [
+        { label: 'Overview', path: 'OVERVIEW' },
+        { label: 'International Awards', path: 'INTERNATIONALAWARDS' },
+        { label: 'Day/Board', path: 'DAYBOARD' },
+        { label: 'Funds Analysis', path: 'FUNDSANALYSIS' },
+        { label: 'Accounting Funds', path: 'ACCOUNTINGFUNDS' },
+        { label: 'Student Details', path: 'STUDENTDETAILS' },
+        { label: 'Award Timing', path: 'AWARDTIMING' },
+        { label: 'SAI Analysis', path: 'SAIANALYSIS' }
+      ];
+      var TABLEAU_BASE = 'https://us-east-1.online.tableau.com/#/site/principia_prod/views/SchoolFinancialAidDashboard/';
+
+      function getCurrentDashboardName() {
+        try { return tableau.extensions.dashboardContent.dashboard.name; }
+        catch (e) { return null; }
+      }
+      function navigateTo(path) {
+        window.open(TABLEAU_BASE + encodeURIComponent(path).replace(/%20/g, '%20'), '_top');
+      }
+      function renderButtons() {
+        var container = document.getElementById('nav-container');
+        var current = getCurrentDashboardName();
+        BUTTONS.forEach(function (btn) {
+          var el = document.createElement('div');
+          el.className = 'nav-btn';
+          el.textContent = btn.label;
+          if (current) {
+            var d = current.toLowerCase().replace(/\s+/g, '');
+            var p = btn.path.toLowerCase().replace(/\s+/g, '');
+            if (d === p) el.classList.add('active');
+          }
+          el.addEventListener('click', function () {
+            if (!el.classList.contains('active')) navigateTo(btn.path);
+          });
+          container.appendChild(el);
+        });
+      }
+      function resizeButtons() {
+        var c = document.getElementById('nav-container');
+        var w = c.clientWidth, numB = BUTTONS.length;
+        var avail = (w - (numB - 1) * 6 - 16) / numB;
+        var fs = Math.max(Math.min(avail * 0.11, c.clientHeight * 0.35, 14), 9);
+        c.querySelectorAll('.nav-btn').forEach(function (b) { b.style.fontSize = fs + 'px'; });
+      }
+      new ResizeObserver(resizeButtons).observe(document.getElementById('nav-container'));
+      tableau.extensions.initializeAsync().then(function () {
+        renderButtons(); resizeButtons();
+      }).catch(function (e) {
+        document.getElementById('nav-container').textContent = 'Init error';
+      });
+    })();
+  </script>
+</body>
+</html>
