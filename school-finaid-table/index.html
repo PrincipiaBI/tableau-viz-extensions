@@ -442,7 +442,8 @@
         progressAmberThreshold: 0.9,
         showSearch: true,
         bandingColor: '#f9fafb',
-        fontSize: 'medium'
+        fontSize: 'medium',
+        defaultSort: [] // array of {column: 'fieldName', direction: 'asc'|'desc'}
       };
 
       var columnRenames = {}; // { fieldName: customDisplayName }
@@ -482,7 +483,7 @@
       // --- Config dialog ---
       function showConfig() {
         var popupUrl = window.location.href.replace('index.html', 'config.html');
-        tableau.extensions.ui.displayDialogAsync(popupUrl, '', { height: 480, width: 420 })
+        tableau.extensions.ui.displayDialogAsync(popupUrl, '', { height: 580, width: 460 })
           .then(function () { loadConfig(); applyFontSize(); renderTable(); })
           .catch(function (error) {
             if (error.errorCode !== tableau.ErrorCodes.DialogClosedByUser) {
@@ -507,6 +508,9 @@
 
         var renamesStr = s.get('_columnRenames');
         columnRenames = renamesStr ? JSON.parse(renamesStr) : {};
+
+        var defaultSortStr = s.get('defaultSort');
+        config.defaultSort = defaultSortStr ? JSON.parse(defaultSortStr) : [];
       }
 
       function applyFontSize() {
@@ -613,8 +617,13 @@
         if (fingerprint === lastDataFingerprint) return;
         lastDataFingerprint = fingerprint;
 
-        sortCol = -1;
-        sortDir = 0;
+        // Apply default sort if no manual sort has been set
+        if (config.defaultSort.length > 0) {
+          applyDefaultSort();
+        } else {
+          sortCol = -1;
+          sortDir = 0;
+        }
 
         // Defer render if a menu or rename dialog is open
         if (document.querySelector('.col-menu.open') || document.querySelector('.rename-overlay')) {
@@ -622,6 +631,24 @@
           return;
         }
         renderTable();
+      }
+
+      // --- Apply default multi-field sort ---
+      function applyDefaultSort() {
+        if (!config.defaultSort || config.defaultSort.length === 0 || currentColumns.length === 0) {
+          sortCol = -1;
+          sortDir = 0;
+          return;
+        }
+        // Use first sort field for the header indicator
+        var firstSort = config.defaultSort[0];
+        for (var i = 0; i < currentColumns.length; i++) {
+          if (currentColumns[i].fieldName === firstSort.column) {
+            sortCol = i;
+            sortDir = firstSort.direction === 'desc' ? 2 : 1;
+            break;
+          }
+        }
       }
 
       // --- Render table ---
@@ -663,8 +690,41 @@
           }
         }
 
-        // Sort
-        if (sortCol >= 0 && sortDir > 0) {
+        // Sort — supports multi-field default sort or single-column manual sort
+        if (config.defaultSort.length > 0 && sortCol >= 0 && sortDir > 0) {
+          // Multi-field sort from config
+          filteredIndices.sort(function (a, b) {
+            for (var s = 0; s < config.defaultSort.length; s++) {
+              var sf = config.defaultSort[s];
+              var colIdx = -1;
+              for (var ci = 0; ci < currentColumns.length; ci++) {
+                if (currentColumns[ci].fieldName === sf.column) { colIdx = ci; break; }
+              }
+              if (colIdx < 0) continue;
+              var cn = currentColumns[colIdx].fieldName;
+              var ct = currentColumns[colIdx].dataType;
+              var d = sf.direction === 'desc' ? -1 : 1;
+              var aVal = currentData[a][cn];
+              var bVal = currentData[b][cn];
+              var aRaw = aVal ? aVal.value : null;
+              var bRaw = bVal ? bVal.value : null;
+              if ((aRaw === null || aRaw === '%null%' || aRaw === 'Null') && !(bRaw === null || bRaw === '%null%' || bRaw === 'Null')) return 1;
+              if (!(aRaw === null || aRaw === '%null%' || aRaw === 'Null') && (bRaw === null || bRaw === '%null%' || bRaw === 'Null')) return -1;
+              if ((aRaw === null || aRaw === '%null%') && (bRaw === null || bRaw === '%null%')) continue;
+              var cmp = 0;
+              if (ct === 'float' || ct === 'int') {
+                cmp = (parseFloat(aRaw) - parseFloat(bRaw)) * d;
+              } else {
+                var aStr = String((aVal && aVal.formatted) || aRaw).toLowerCase();
+                var bStr = String((bVal && bVal.formatted) || bRaw).toLowerCase();
+                cmp = aStr < bStr ? -1 * d : aStr > bStr ? 1 * d : 0;
+              }
+              if (cmp !== 0) return cmp;
+            }
+            return 0;
+          });
+        } else if (sortCol >= 0 && sortDir > 0) {
+          // Single-column manual sort (user clicked header)
           var colName = currentColumns[sortCol].fieldName;
           var colType = currentColumns[sortCol].dataType;
           var dir = sortDir === 1 ? 1 : -1;
