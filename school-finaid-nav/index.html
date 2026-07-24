@@ -9,9 +9,10 @@
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
     body { display: flex; align-items: center; justify-content: center; }
     .nav-container { display: flex; align-items: center; justify-content: center;
-      width: 100%; height: 100%; padding: 4px 8px; gap: 6px; flex-wrap: nowrap; }
+      width: 100%; height: 100%; padding: 4px 8px; gap: 6px; flex-wrap: nowrap; flex-direction: row; }
+    .nav-container.vertical { flex-direction: column; padding: 8px 4px; }
     .nav-btn { display: flex; align-items: center; justify-content: center; flex: 1 1 0;
-      height: calc(100% - 8px); max-height: 42px; padding: 6px 16px; background: #ffffff;
+      height: calc(100% - 8px); max-height: 42px; min-width: 0; width: auto; padding: 6px 16px; background: #ffffff;
       border: 1px solid #c0c0c0; border-radius: 3px; color: #2c3e5a; font-size: 13px;
       font-weight: 500; text-align: center; white-space: nowrap; cursor: pointer;
       transition: all 0.15s ease; user-select: none; }
@@ -66,10 +67,19 @@
       }
       function resizeButtons() {
         var c = document.getElementById('nav-container');
-        var w = c.clientWidth, numB = BUTTONS.length;
-        var avail = (w - (numB - 1) * 6 - 16) / numB;
-        var fs = Math.max(Math.min(avail * 0.11, c.clientHeight * 0.35, 14), 9);
-        c.querySelectorAll('.nav-btn').forEach(function (b) { b.style.fontSize = fs + 'px'; });
+        var w = c.clientWidth, h = c.clientHeight, numB = BUTTONS.length;
+        var isVertical = h > w * 0.6;
+        c.classList.toggle('vertical', isVertical);
+        var buttons = c.querySelectorAll('.nav-btn');
+        if (isVertical) {
+          var availH = (h - (numB - 1) * 6 - 16) / numB;
+          var fs = Math.max(Math.min(w * 0.06, availH * 0.5, 14), 9);
+          buttons.forEach(function (b) { b.style.fontSize = fs + 'px'; b.style.width = '100%'; b.style.maxHeight = availH + 'px'; b.style.height = ''; });
+        } else {
+          var avail = (w - (numB - 1) * 6 - 16) / numB;
+          var fs = Math.max(Math.min(avail * 0.11, h * 0.35, 14), 9);
+          buttons.forEach(function (b) { b.style.fontSize = fs + 'px'; b.style.width = ''; b.style.maxHeight = '42px'; b.style.height = 'calc(100% - 8px)'; });
+        }
       }
       new ResizeObserver(resizeButtons).observe(document.getElementById('nav-container'));
       tableau.extensions.initializeAsync().then(function () {
