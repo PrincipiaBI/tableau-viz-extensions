@@ -30,6 +30,12 @@
       padding: 4px 8px;
       gap: 6px;
       flex-wrap: nowrap;
+      flex-direction: row;
+    }
+
+    .nav-container.vertical {
+      flex-direction: column;
+      padding: 8px 4px;
     }
 
     .nav-btn {
@@ -39,6 +45,8 @@
       flex: 1 1 0;
       height: calc(100% - 8px);
       max-height: 42px;
+      min-width: 0;
+      width: auto;
       padding: 6px 16px;
       background: #ffffff;
       border: 1px solid #c0c0c0;
@@ -142,20 +150,38 @@
         });
       }
 
-      // Responsive font sizing
+      // Responsive layout and font sizing
       function resizeButtons() {
         var container = document.getElementById('nav-container');
         var h = container.clientHeight;
         var w = container.clientWidth;
         var numButtons = BUTTONS.length;
 
-        var availWidth = (w - (numButtons - 1) * 6 - 16) / numButtons;
-        var fontSize = Math.max(Math.min(availWidth * 0.11, h * 0.35, 14), 9);
+        // Switch to vertical when container is taller than a single-row nav would need
+        var isVertical = h > w * 0.6;
+        container.classList.toggle('vertical', isVertical);
 
         var buttons = container.querySelectorAll('.nav-btn');
-        buttons.forEach(function (btn) {
-          btn.style.fontSize = fontSize + 'px';
-        });
+        var fontSize;
+        if (isVertical) {
+          var availHeight = (h - (numButtons - 1) * 6 - 16) / numButtons;
+          fontSize = Math.max(Math.min(w * 0.06, availHeight * 0.5, 14), 9);
+          buttons.forEach(function (btn) {
+            btn.style.fontSize = fontSize + 'px';
+            btn.style.width = '100%';
+            btn.style.maxHeight = availHeight + 'px';
+            btn.style.height = '';
+          });
+        } else {
+          var availWidth = (w - (numButtons - 1) * 6 - 16) / numButtons;
+          fontSize = Math.max(Math.min(availWidth * 0.11, h * 0.35, 14), 9);
+          buttons.forEach(function (btn) {
+            btn.style.fontSize = fontSize + 'px';
+            btn.style.width = '';
+            btn.style.maxHeight = '42px';
+            btn.style.height = 'calc(100% - 8px)';
+          });
+        }
       }
 
       var resizeObserver = new ResizeObserver(resizeButtons);
