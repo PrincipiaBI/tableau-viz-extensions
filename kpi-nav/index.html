@@ -92,7 +92,7 @@
       // BUTTON DEFINITIONS — Edit this array to update all dashboards at once
       // =====================================================================
       var BUTTONS = [
-        { label: 'OVERVIEW',  path: 'OVERVIEW' },
+        { label: 'KPI OVERVIEW',  path: 'KPIOVERVIEW' },
         { label: 'AT RISK',   path: 'ATRISK' },
         { label: 'ACHIEVED',  path: 'ACHIEVED' },
         { label: 'ALL KPIS',  path: 'ALLKPIS' }
@@ -111,25 +111,10 @@
         }
       }
 
-      // Check if top-level navigation is blocked (e.g. Teams embed)
-      function isTopNavBlocked() {
-        try {
-          if (window.top === window.self) return false;
-          var test = window.top.location.href;
-          return false;
-        } catch (e) {
-          return true;
-        }
-      }
-
-      // Navigate to a dashboard — falls back to new tab if in a sandboxed embed
+      // Navigate to a dashboard using top-level navigation
       function navigateTo(path) {
         var url = TABLEAU_BASE + encodeURIComponent(path).replace(/%20/g, '%20');
-        if (isTopNavBlocked()) {
-          window.open(url, '_blank');
-        } else {
-          window.open(url, '_top');
-        }
+        window.open(url, '_top');
       }
 
       // Render buttons
