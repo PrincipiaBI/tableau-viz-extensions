@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Elumen Navigation</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #e8e8e8;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .nav-container {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      height: 100%;
+      padding: 4px 8px;
+      gap: 6px;
+      flex-wrap: nowrap;
+      flex-direction: row;
+    }
+
+    .nav-container.vertical {
+      flex-direction: column;
+      padding: 8px 4px;
+    }
+
+    .nav-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex: 1 1 0;
+      height: calc(100% - 8px);
+      max-height: 42px;
+      min-width: 0;
+      width: auto;
+      padding: 6px 16px;
+      background: #ffffff;
+      border: 1px solid #c0c0c0;
+      border-radius: 3px;
+      color: #2c3e5a;
+      font-size: 13px;
+      font-weight: 500;
+      text-align: center;
+      white-space: nowrap;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      text-decoration: none;
+      user-select: none;
+    }
+
+    .nav-btn:hover {
+      background: #f0f4f8;
+      border-color: #2c3e5a;
+    }
+
+    .nav-btn.active {
+      background: #2c3e5a;
+      color: #ffffff;
+      border-color: #2c3e5a;
+      font-weight: 600;
+      cursor: default;
+    }
+
+    .nav-btn.active:hover {
+      background: #2c3e5a;
+    }
+  </style>
+</head>
+<body>
+  <div class="nav-container" id="nav-container"></div>
+
+  <script src="../lib/tableau.extensions.1.latest.min.js"></script>
+  <script>
+    'use strict';
+    (function () {
+
+      // =====================================================================
+      // BUTTON DEFINITIONS — Edit this array to update all dashboards at once
+      // =====================================================================
+      var BUTTONS = [
+        { label: 'CO ASSESSMENTS OVERVIEW',  path: 'COASSESSMENTSOVERVIEW' },
+        { label: 'SCORES BY MAJOR',   path: 'SCORESBYMAJOR' },
+        { label: 'ASSESSMENTS BY COURSE',  path: 'ASSESSMENTSBYCOURSE' },
+        { label: 'COMPARE CANVAS-INSIGHTS',  path: 'COMPARECANVAS-INSIGHTS' }
+      ];
+
+      // Tableau Cloud base URL and workbook name
+      var TABLEAU_BASE = 'https://us-east-1.online.tableau.com/#/site/principia_prod/views/EluminInsights/';
+      // =====================================================================
+
+      // Detect the current dashboard name from the Tableau API
+      function getCurrentDashboardName() {
+        try {
+          return tableau.extensions.dashboardContent.dashboard.name;
+        } catch (e) {
+          return null;
+        }
+      }
+
+      // Navigate to a dashboard using top-level navigation
+      function navigateTo(path) {
+        var url = TABLEAU_BASE + encodeURIComponent(path).replace(/%20/g, '%20');
+        window.open(url, '_top');
+      }
+
+      // Render buttons
+      function renderButtons() {
+        var container = document.getElementById('nav-container');
+        var currentDashboard = getCurrentDashboardName();
+
+        BUTTONS.forEach(function (btn) {
+          var el = document.createElement('div');
+          el.className = 'nav-btn';
+          el.textContent = btn.label;
+
+          if (currentDashboard) {
+            var dashNorm = currentDashboard.toLowerCase().replace(/\s+/g, '');
+            var pathNorm = btn.path.toLowerCase().replace(/\s+/g, '');
+            if (dashNorm === pathNorm) {
+              el.classList.add('active');
+            }
+          }
+
+          el.addEventListener('click', function () {
+            if (el.classList.contains('active')) return;
+            navigateTo(btn.path);
+          });
+
+          container.appendChild(el);
+        });
+      }
+
+      // Responsive layout and font sizing
+      function resizeButtons() {
+        var container = document.getElementById('nav-container');
+        var h = container.clientHeight;
+        var w = container.clientWidth;
+        var numButtons = BUTTONS.length;
+
+        var isVertical = h > w * 0.6;
+        container.classList.toggle('vertical', isVertical);
+
+        var buttons = container.querySelectorAll('.nav-btn');
+        var fontSize;
+        if (isVertical) {
+          var availHeight = (h - (numButtons - 1) * 6 - 16) / numButtons;
+          fontSize = Math.max(Math.min(w * 0.06, availHeight * 0.5, 14), 9);
+          buttons.forEach(function (btn) {
+            btn.style.fontSize = fontSize + 'px';
+            btn.style.width = '100%';
+            btn.style.maxHeight = availHeight + 'px';
+            btn.style.height = '';
+          });
+        } else {
+          var availWidth = (w - (numButtons - 1) * 6 - 16) / numButtons;
+          fontSize = Math.max(Math.min(availWidth * 0.11, h * 0.35, 14), 9);
+          buttons.forEach(function (btn) {
+            btn.style.fontSize = fontSize + 'px';
+            btn.style.width = '';
+            btn.style.maxHeight = '42px';
+            btn.style.height = 'calc(100% - 8px)';
+          });
+        }
+      }
+
+      var resizeObserver = new ResizeObserver(resizeButtons);
+      resizeObserver.observe(document.getElementById('nav-container'));
+
+      // Initialize
+      tableau.extensions.initializeAsync().then(function () {
+        renderButtons();
+        resizeButtons();
+      }).catch(function (err) {
+        console.error('[ElumenNav] Init failed:', err);
+        document.getElementById('nav-container').textContent = 'Init error';
+      });
+
+    })();
+  </script>
+</body>
+</html>
